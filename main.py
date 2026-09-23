@@ -4,7 +4,7 @@ from datetime import datetime
 
 from database import engine, Base, SessionLocal
 from models import Report
-from schemas import ReportCreate, ReportUpdate
+from schemas import  ReportUpdate
 import os
 
 
