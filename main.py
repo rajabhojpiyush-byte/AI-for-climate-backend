@@ -6,8 +6,7 @@ import os
 from database import engine, Base, get_db
 from models import Report
 from schemas import ReportUpdate
-#from routers.reports_dashboard import router as dashboard_router
-
+from routers.reports_dashboard import router as dashboard_router
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -17,11 +16,10 @@ Base.metadata.create_all(bind=engine)
 app = FastAPI(
     title="AI Disaster Report System"
 )
+app.include_router(dashboard_router)
 
 # Include partner's dashboard routes
-#app.include_router(dashboard_router)
-
-
+app.include_router(dashboard_router)
 # Home
 @app.get("/")
 def home():
