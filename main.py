@@ -1,9 +1,10 @@
 from fastapi import FastAPI, Depends
 from sqlalchemy.orm import Session
 
-from database import engine, Base, SessionLocal
+from database import engine, Base, SessionLocal , get_db
 from models import Report
 from schemas import ReportCreate
+from routers.reports_dashboard import router as dashboard_router
 
 
 # Create database tables
@@ -14,16 +15,8 @@ Base.metadata.create_all(bind=engine)
 app = FastAPI(
     title="AI Disaster Report System"
 )
+app.include_router(dashboard_router)
 
-
-# Database connection
-def get_db():
-    db = SessionLocal()
-
-    try:
-        yield db
-    finally:
-        db.close()
 
 
 # Home
