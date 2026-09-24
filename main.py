@@ -16,10 +16,10 @@ Base.metadata.create_all(bind=engine)
 app = FastAPI(
     title="AI Disaster Report System"
 )
-app.include_router(dashboard_router)
-
 # Include partner's dashboard routes
 app.include_router(dashboard_router)
+
+
 # Home
 @app.get("/")
 def home():
@@ -65,14 +65,26 @@ async def create_report(
         "report_id": new_report.id,
         "image": image_path
     }
-
-
-# Get all reports
+# Get all reports (with optional filters)
 @app.get("/reports")
-def get_reports(db: Session = Depends(get_db)):
-    reports = db.query(Report).all()
+def get_reports(
+    status: str | None = None,
+    severity: str | None = None,
+    disaster_type: str | None = None,
+    db: Session = Depends(get_db)
+):
+    query = db.query(Report)
 
-    return reports
+    if status:
+        query = query.filter(Report.status == status)
+    if severity:
+        query = query.filter(Report.severity == severity)
+    if disaster_type:
+        query = query.filter(Report.disaster_type == disaster_type)
+
+    return query.all()
+
+
 
 
 # Get single report

@@ -58,24 +58,6 @@ class DashboardStatsOut(BaseModel):
     duplicates_count: int
 
 
-# ---------- PATCH /reports/{id} ----------
-
-@router.patch("/reports/{report_id}", response_model=ReportOut)
-def update_report(report_id: int, body: ReportUpdateIn, db: Session = Depends(get_db)):
-    report = db.query(Report).filter(Report.id == report_id).first()
-    if report is None:
-        raise HTTPException(status_code=404, detail=f"Report {report_id} not found")
-
-    # Only update fields that were actually sent (not None)
-    update_data = body.dict(exclude_unset=True)
-    for field, value in update_data.items():
-        setattr(report, field, value)
-
-    db.commit()
-    db.refresh(report)
-    return report
-
-
 # ---------- GET /dashboard/stats ----------
 
 @router.get("/dashboard/stats", response_model=DashboardStatsOut)
