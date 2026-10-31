@@ -1,0 +1,285 @@
+@import "tailwindcss";
+
+/* Universal Theme Variables */
+:root {
+  --font-sans: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, sans-serif;
+
+  /* LIGHT THEME (Default): Soft Alabaster, Pastels & Sculpted Neomorphism */
+  --bg-main: #F4F6FB;
+  --bg-card: rgba(255, 255, 255, 0.82);
+  --bg-card-solid: #FFFFFF;
+  --bg-card-hover: rgba(255, 255, 255, 0.95);
+  --border-subtle: rgba(226, 232, 240, 0.8);
+  --border-focus: rgba(168, 85, 247, 0.45);
+  --text-main: #0F172A;
+  --text-muted: #64748B;
+  --input-bg: #FFFFFF;
+
+  /* Pastel Palette Accents */
+  --pastel-purple: #FAF5FF;
+  --pastel-purple-border: #E9D5FF;
+  --pastel-blue: #F0F9FF;
+  --pastel-blue-border: #BAE6FD;
+  --pastel-emerald: #ECFDF5;
+  --pastel-rose: #FFF1F2;
+
+  /* Pure Neomorphic Dual-Shadow System */
+  --shadow-neo-flat: 7px 7px 16px #d5dbe7, -7px -7px 16px #ffffff;
+  --shadow-neo-pressed: inset 3px 3px 6px #d1d7e3, inset -3px -3px 6px #ffffff;
+  --shadow-neo-elevated: 10px 10px 24px #d0d6e3, -10px -10px 24px #ffffff;
+  --shadow-glass: 0 16px 35px -8px rgba(100, 116, 139, 0.12), 0 0 0 1px rgba(255, 255, 255, 0.9) inset;
+
+  /* Glow Halos */
+  --glow-p1: 0 0 20px rgba(239, 68, 68, 0.28);
+  --glow-purple: 0 0 22px rgba(168, 85, 247, 0.25);
+  --glow-blue: 0 0 20px rgba(56, 189, 248, 0.25);
+}
+
+/* DARK THEME: Frosted Obsidian, Neon Accents & Soft Dark Embossing */
+html.dark, body.dark {
+  --bg-main: #0B0F19;
+  --bg-card: rgba(18, 24, 38, 0.78);
+  --bg-card-solid: #121826;
+  --bg-card-hover: rgba(30, 41, 59, 0.88);
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-focus: rgba(168, 85, 247, 0.5);
+  --text-main: #F8FAFC;
+  --text-muted: #94A3B8;
+  --input-bg: #070A12;
+
+  /* Dark Pastel Badges */
+  --pastel-purple: rgba(147, 51, 234, 0.12);
+  --pastel-purple-border: rgba(168, 85, 247, 0.3);
+  --pastel-blue: rgba(37, 99, 235, 0.12);
+  --pastel-blue-border: rgba(56, 189, 248, 0.3);
+  --pastel-emerald: rgba(16, 185, 129, 0.12);
+  --pastel-rose: rgba(239, 68, 68, 0.12);
+
+  --shadow-neo-flat: 6px 6px 14px #06090e, -6px -6px 14px #111726;
+  --shadow-neo-pressed: inset 3px 3px 8px #05070c, inset -3px -3px 8px #141c2e;
+  --shadow-neo-elevated: 12px 12px 28px #05070c, -12px -12px 28px #131a2c;
+  --shadow-glass: 0 20px 40px -10px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.08) inset;
+
+  --glow-p1: 0 0 25px rgba(239, 68, 68, 0.45);
+  --glow-purple: 0 0 25px rgba(168, 85, 247, 0.35);
+  --glow-blue: 0 0 25px rgba(56, 189, 248, 0.35);
+}
+
+html, body {
+  font-family: var(--font-sans);
+  background-color: var(--bg-main) !important;
+  color: var(--text-main) !important;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition: background-color 0.35s ease, color 0.35s ease;
+  overflow-x: hidden;
+}
+
+/* Glass Pill Navbar Container */
+.we-evolve-pill {
+  background: var(--bg-card) !important;
+  border: 1px solid var(--border-subtle) !important;
+  box-shadow: var(--shadow-glass) !important;
+  backdrop-filter: blur(18px) saturate(190%) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(190%) !important;
+}
+
+/* Neomorphic Spatial Cards */
+.spatial-card {
+  background: var(--bg-card);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--border-subtle);
+  box-shadow: var(--shadow-neo-flat);
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease, border-color 0.25s ease;
+}
+
+.spatial-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-neo-elevated);
+  border-color: var(--border-focus);
+}
+
+/* Micro-Tactile Press + Spring Bounce */
+.tactile-spring {
+  transition: transform 0.18s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.18s ease;
+}
+
+.tactile-spring:hover {
+  transform: translateY(-1.5px) scale(1.015);
+}
+
+.tactile-spring:active {
+  transform: translateY(2px) scale(0.965);
+}
+
+/* Magnetic CTA Shimmer Button */
+.btn-magnetic-purple {
+  background: linear-gradient(135deg, #9333EA 0%, #6366F1 100%);
+  color: #FFFFFF !important;
+  box-shadow: 0 8px 20px -4px rgba(147, 51, 234, 0.35);
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-magnetic-purple:hover {
+  background: linear-gradient(135deg, #8B2DE2 0%, #5850EC 100%);
+  box-shadow: 0 12px 25px -4px rgba(147, 51, 234, 0.45);
+}
+
+.btn-magnetic-blue {
+  background: linear-gradient(135deg, #2563EB 0%, #06B6D4 100%);
+  color: #FFFFFF !important;
+  box-shadow: 0 8px 20px -4px rgba(37, 99, 235, 0.35);
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-magnetic-blue:hover {
+  background: linear-gradient(135deg, #1D4ED8 0%, #0891B2 100%);
+  box-shadow: 0 12px 25px -4px rgba(37, 99, 235, 0.45);
+}
+
+/* Fade + Lift Entrance Animation */
+@keyframes fadeLift {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-lift {
+  animation: fadeLift 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Pulsing radar for live critical situations */
+@keyframes p1Pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.85; transform: scale(1.04); }
+}
+
+.animate-p1-pulse {
+  animation: p1Pulse 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Form inputs */
+input, textarea, select {
+  background-color: var(--input-bg) !important;
+  color: var(--text-main) !important;
+  border-color: var(--border-subtle) !important;
+  box-shadow: var(--shadow-neo-pressed) !important;
+}
+
+input:focus, textarea:focus, select:focus {
+  border-color: var(--border-focus) !important;
+  outline: none !important;
+  box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.2) !important;
+}
+
+/* Leaflet Tile Styling for Light & Dark */
+.leaflet-container {
+  width: 100%;
+  height: 100%;
+  border-radius: 1rem;
+}
+
+html.dark .leaflet-tile {
+  filter: brightness(0.7) invert(1) contrast(3) hue-rotate(200deg) saturate(0.35);
+}
+
+/* --- UIVERSE ANIMATED CTA BUTTONS (Theme Adaptive & Responsive) --- */
+.cssbuttons-io-button {
+  color: white !important;
+  font-family: inherit;
+  padding: 0.35em;
+  padding-left: 1.3em;
+  font-size: 15px;
+  font-weight: 600;
+  border-radius: 1em;
+  border: none;
+  letter-spacing: 0.03em;
+  display: inline-flex;
+  align-items: center;
+  overflow: hidden;
+  position: relative;
+  height: 2.9em;
+  padding-right: 3.4em;
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+  user-select: none;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* 1. Purple Theme (Report Incident) */
+.cssbuttons-io-button.btn-purple {
+  background: linear-gradient(135deg, #9333ea, #7c3aed);
+  box-shadow: inset 0 0 1.6em -0.6em #6b21a8, 0 8px 20px -4px rgba(147, 51, 234, 0.35);
+}
+
+.cssbuttons-io-button.btn-purple .icon {
+  background: #ffffff;
+  margin-left: 1em;
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 2.3em;
+  width: 2.3em;
+  border-radius: 0.75em;
+  box-shadow: 0.1em 0.1em 0.6em 0.2em rgba(126, 34, 206, 0.35);
+  right: 0.3em;
+  transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.cssbuttons-io-button.btn-purple .icon svg {
+  width: 1.15em;
+  height: 1.15em;
+  transition: transform 0.3s ease;
+  color: #7c3aed;
+}
+
+/* 2. Blue Theme (Track Incident) */
+.cssbuttons-io-button.btn-blue {
+  background: linear-gradient(135deg, #2563eb, #0284c7);
+  box-shadow: inset 0 0 1.6em -0.6em #1d4ed8, 0 8px 20px -4px rgba(37, 99, 235, 0.35);
+}
+
+.cssbuttons-io-button.btn-blue .icon {
+  background: #ffffff;
+  margin-left: 1em;
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 2.3em;
+  width: 2.3em;
+  border-radius: 0.75em;
+  box-shadow: 0.1em 0.1em 0.6em 0.2em rgba(29, 78, 216, 0.35);
+  right: 0.3em;
+  transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.cssbuttons-io-button.btn-blue .icon svg {
+  width: 1.15em;
+  height: 1.15em;
+  transition: transform 0.3s ease;
+  color: #2563eb;
+}
+
+/* Hover & Active Effects */
+.cssbuttons-io-button:hover .icon {
+  width: calc(100% - 0.6em);
+}
+
+.cssbuttons-io-button:hover .icon svg {
+  transform: translateX(0.15em);
+}
+
+.cssbuttons-io-button:active {
+  transform: scale(0.96);
+}
