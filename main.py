@@ -20,8 +20,8 @@ Base.metadata.create_all(bind=engine)
 app = FastAPI(
     title="AI Disaster Report System"
 )
-
-# Include dashboard routes only once
+# Include dashboard routes
+app.include_router(dashboard_router)
 app.include_router(dashboard_router)
 
 
@@ -124,13 +124,42 @@ async def create_report(
         "ai_reasoning": new_report.ai_reasoning,
         "human_review_required": new_report.human_review_required
     }
-
-
-# Get all reports
+# Get all reports (with optional filters)
 @app.get("/reports")
-def get_reports(db: Session = Depends(get_db)):
-    reports = db.query(Report).all()
-    return reports
+def get_reports(
+    status: str | None = None,
+    severity: str | None = None,
+    disaster_type: str | None = None,
+    db: Session = Depends(get_db)
+):
+    query = db.query(Report)
+
+    if status:
+        query = query.filter(Report.status == status)
+    if severity:
+        query = query.filter(Report.severity == severity)
+    if disaster_type:
+        query = query.filter(Report.disaster_type == disaster_type)
+
+    return query.all()
+
+@app.get("/reports")
+def get_reports(
+    status: str | None = None,
+    severity: str | None = None,
+    disaster_type: str | None = None,
+    db: Session = Depends(get_db)
+):
+    query = db.query(Report)
+
+    if status:
+        query = query.filter(Report.status == status)
+    if severity:
+        query = query.filter(Report.severity == severity)
+    if disaster_type:
+        query = query.filter(Report.disaster_type == disaster_type)
+
+    return query.all()
 
 
 # Get single report
