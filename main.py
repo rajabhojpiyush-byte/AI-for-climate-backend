@@ -1,12 +1,16 @@
+
 from fastapi import FastAPI, Depends, UploadFile, File, Form
 from sqlalchemy.orm import Session
 from datetime import datetime
 import os
+import json
 
 from database import engine, Base, get_db
 from models import Report
 from schemas import ReportUpdate
 from routers.reports_dashboard import router as dashboard_router
+from ai.nugen_client import analyze_disaster_report
+
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -16,10 +20,11 @@ Base.metadata.create_all(bind=engine)
 app = FastAPI(
     title="AI Disaster Report System"
 )
+# Include dashboard routes
+app.include_router(dashboard_router)
 app.include_router(dashboard_router)
 
-# Include partner's dashboard routes
-app.include_router(dashboard_router)
+
 # Home
 @app.get("/")
 def home():
@@ -28,7 +33,7 @@ def home():
     }
 
 
-# Create a new report + image upload
+# Create a new report + image upload + AI analysis
 @app.post("/reports")
 async def create_report(
     description: str = Form(...),
@@ -40,6 +45,7 @@ async def create_report(
 ):
     image_path = None
 
+    # Save uploaded image
     if image:
         os.makedirs("uploads", exist_ok=True)
 
@@ -48,6 +54,7 @@ async def create_report(
         with open(image_path, "wb") as file:
             file.write(await image.read())
 
+    # Create report
     new_report = Report(
         description=description,
         latitude=latitude,
@@ -56,6 +63,52 @@ async def create_report(
         image=image_path
     )
 
+    # Run AI analysis
+    ai_status = "Failed"
+
+    try:
+        ai_response = analyze_disaster_report(description)
+
+        # Convert AI response into JSON
+        cleaned_response = ai_response.strip()
+
+        if cleaned_response.startswith("```"):
+            cleaned_response = cleaned_response.replace(
+                "```json", ""
+            ).replace("```", "").strip()
+
+        ai_data = json.loads(cleaned_response)
+
+        # Save AI results
+        new_report.disaster_type = (
+            ai_data.get("disaster_category")
+            or ai_data.get("disaster_type")
+            or ai_data.get("category")
+        )
+
+        new_report.severity = ai_data.get("severity")
+
+        new_report.confidence = ai_data.get("confidence")
+
+        new_report.ai_reasoning = (
+            ai_data.get("reasoning")
+            or ai_data.get("explanation")
+        )
+
+        new_report.human_review_required = ai_data.get(
+            "human_review_required", True
+        )
+
+        ai_status = "Success"
+
+    except Exception as e:
+        print("AI Analysis Error:", str(e))
+
+        # Keep report even if AI fails
+        new_report.human_review_required = True
+        new_report.ai_reasoning = "AI analysis unavailable. Manual review required."
+
+    # Save report in database
     db.add(new_report)
     db.commit()
     db.refresh(new_report)
@@ -63,16 +116,50 @@ async def create_report(
     return {
         "message": "Report created successfully",
         "report_id": new_report.id,
-        "image": image_path
+        "image": image_path,
+        "ai_analysis_status": ai_status,
+        "disaster_type": new_report.disaster_type,
+        "severity": new_report.severity,
+        "confidence": new_report.confidence,
+        "ai_reasoning": new_report.ai_reasoning,
+        "human_review_required": new_report.human_review_required
     }
-
-
-# Get all reports
+# Get all reports (with optional filters)
 @app.get("/reports")
-def get_reports(db: Session = Depends(get_db)):
-    reports = db.query(Report).all()
+def get_reports(
+    status: str | None = None,
+    severity: str | None = None,
+    disaster_type: str | None = None,
+    db: Session = Depends(get_db)
+):
+    query = db.query(Report)
 
-    return reports
+    if status:
+        query = query.filter(Report.status == status)
+    if severity:
+        query = query.filter(Report.severity == severity)
+    if disaster_type:
+        query = query.filter(Report.disaster_type == disaster_type)
+
+    return query.all()
+
+@app.get("/reports")
+def get_reports(
+    status: str | None = None,
+    severity: str | None = None,
+    disaster_type: str | None = None,
+    db: Session = Depends(get_db)
+):
+    query = db.query(Report)
+
+    if status:
+        query = query.filter(Report.status == status)
+    if severity:
+        query = query.filter(Report.severity == severity)
+    if disaster_type:
+        query = query.filter(Report.disaster_type == disaster_type)
+
+    return query.all()
 
 
 # Get single report
