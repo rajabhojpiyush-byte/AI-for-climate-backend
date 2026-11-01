@@ -25,9 +25,34 @@ from pydantic import BaseModel, Field, ValidationError, field_validator
 
 # ---------- Allowed values (extend as needed) ----------
 DISASTER_TYPES = {
-    "flood", "fire", "landslide", "cyclone", "earthquake", "heatwave", "other",
+    "flood", "fire", "landslide", "cyclone", "storm", "earthquake", "heatwave", "other",
 }
-SEVERITIES = {"low": "Low", "medium": "Medium", "high": "High", "critical": "Critical"}
+
+# Looser labels the AI may use -> our fixed names (checked in this order)
+_TYPE_PATTERNS = [
+    ("earthquake", ("earthquake", "quake", "seismic", "tremor")),
+    ("landslide", ("landslide", "landslip", "mudslide", "rockfall")),
+    ("flood", ("flood", "inundat", "waterlog")),
+    ("fire", ("fire", "blaze")),
+    ("cyclone", ("cyclone", "hurricane", "typhoon")),
+    ("storm", ("storm",)),
+    ("heatwave", ("heatwave", "heat wave", "extreme heat")),
+]
+
+
+def normalize_disaster_type(value):
+    """'Flood / Water Inundation' -> 'flood'. Raises ValueError if unrecognised."""
+    v = str(value).strip().lower()
+    if v in DISASTER_TYPES:
+        return v
+    if v in ("unknown", "none", "n/a"):
+        return "other"
+    for name, patterns in _TYPE_PATTERNS:
+        if any(p in v for p in patterns):
+            return name
+    raise ValueError(f"unknown disaster_type '{value}'")
+SEVERITIES = {"low": "Low", "medium": "Medium", "moderate": "Medium",
+              "high": "High", "critical": "Critical"}
 
 # Results below this confidence are sent to a human instead of trusted
 LOW_CONFIDENCE_THRESHOLD = 50.0
@@ -45,14 +70,13 @@ class AIAnalysis(BaseModel):
     reasoning: str = Field(min_length=1)
     # Does the image match what the text says? None = no image / unsure.
     image_consistent: Optional[bool] = None
+    # The AI's own "a human should check this" flag (None = it did not say)
+    human_review_required: Optional[bool] = None
 
     @field_validator("disaster_type")
     @classmethod
     def _check_type(cls, v):
-        v = v.strip().lower()
-        if v not in DISASTER_TYPES:
-            raise ValueError(f"unknown disaster_type '{v}'")
-        return v
+        return normalize_disaster_type(v)
 
     @field_validator("severity")
     @classmethod
@@ -91,9 +115,37 @@ def extract_json(raw):
 
 # ---------- Step 2: validate the JSON ----------
 
+# The AI is not always consistent about key names, so accept the common ones
+_KEY_ALIASES = {
+    "disaster_category": "disaster_type",
+    "category": "disaster_type",
+    "explanation": "reasoning",
+}
+
+
+def _normalise_keys(data):
+    data = dict(data)
+    for alias, real in _KEY_ALIASES.items():
+        if real not in data and alias in data:
+            data[real] = data.pop(alias)
+    # confidence: accept "85%", and treat 0-1 as a fraction (0.9 -> 90)
+    c = data.get("confidence")
+    if isinstance(c, str):
+        c = c.strip().rstrip("%").strip()
+        try:
+            c = float(c)
+        except ValueError:
+            return data
+    if isinstance(c, (int, float)) and not isinstance(c, bool):
+        if 0 < c <= 1:
+            c = c * 100
+        data["confidence"] = c
+    return data
+
+
 def parse_ai_response(raw):
     """Raw AI text -> validated AIAnalysis, or raise AIResponseError."""
-    data = extract_json(raw)
+    data = _normalise_keys(extract_json(raw))
     try:
         return AIAnalysis(**data)
     except ValidationError as e:
@@ -138,6 +190,8 @@ def analyze(
                 reasons.append(f"low confidence ({result.confidence})")
             if result.image_consistent is False:
                 reasons.append("image does not match the description")
+            if result.human_review_required is True:
+                reasons.append("AI asked for human review")
             return {
                 "ok": True,
                 "analysis": result.model_dump(),
