@@ -1,10 +1,35 @@
-disaster.db
-venv/
-__pycache__/
-uploads/
-tempCodeRunnerFile.py
+# Environments
 .env
+.env.*
 venv/
+.venv/
+env/
+ENV/
+
+# Database & Uploads
+disaster.db
+*.sqlite
+*.sqlite3
+uploads/
+
+# Python cache & build
+__pycache__/
+*.py[cod]
+*$py.class
+tempCodeRunnerFile.py
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Node / Frontend (if co-located)
 node_modules/
 frontend/node_modules/
 frontend/dist/
+dist/
+build/
+
+# Operating System & IDEs
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
