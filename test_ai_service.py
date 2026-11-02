@@ -118,11 +118,28 @@ def test_no_keywords_and_ai_failed_gives_no_type():
     print("PASS  AI down + no keywords -> no type guess, review required")
 
 
+def test_priority_score_follows_severity():
+    for sev, expected in [("Critical", 100.0), ("High", 75.0), ("Medium", 50.0), ("Low", 25.0)]:
+        r = run(fake(json.dumps({**NUGEN_STYLE, "severity": sev})))
+        assert r["priority_score"] == expected, (sev, r["priority_score"])
+    print("PASS  priority score follows severity (Critical 100 ... Low 25)")
+
+
+def test_failed_ai_has_no_priority_and_does_not_crash():
+    r = run(fake("garbage"))
+    assert r["priority_score"] is None
+    report = SimpleNamespace()
+    apply_to_report(report, r)
+    assert report.priority_score is None and report.human_review_required is True
+    print("PASS  AI failed -> priority None, no crash (severity None is safe)")
+
+
 def test_apply_to_report():
     report = SimpleNamespace()
     apply_to_report(report, run(fake(json.dumps(NUGEN_STYLE))))
     assert report.disaster_type == "flood" and report.severity == "High"
     assert report.confidence == 90.0 and report.human_review_required is False
+    assert report.priority_score == 75.0   # High -> 75 (from ai/priority.py)
     assert report.ai_reasoning.startswith("Report describes")
     print("PASS  apply_to_report fills the Report fields")
 
@@ -138,5 +155,7 @@ if __name__ == "__main__":
     test_api_timeout_does_not_crash()
     test_retry_recovers()
     test_no_keywords_and_ai_failed_gives_no_type()
+    test_priority_score_follows_severity()
+    test_failed_ai_has_no_priority_and_does_not_crash()
     test_apply_to_report()
     print("\nAll tests passed.")

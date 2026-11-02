@@ -34,6 +34,17 @@ def _keyword_guess(description: str) -> Optional[str]:
     return None if guess == "unknown" else guess
 
 
+def _priority_score(severity):
+    """Priority score from the existing ai/priority.py. None if severity is unknown."""
+    if not severity:
+        return None
+    try:
+        from ai.priority import calculate_priority
+        return float(calculate_priority(severity)["score"])
+    except Exception:
+        return None
+
+
 def analyze_text_report(
     description: str,
     call_ai: Optional[Callable[[str], str]] = None,
@@ -48,6 +59,7 @@ def analyze_text_report(
       disaster_type          cleaned type, or a keyword guess / None if the AI failed
       severity               Low / Medium / High / Critical, or None if the AI failed
       confidence             0-100, or None if the AI failed
+      priority_score         from ai/priority.py based on severity, or None if unknown
       reasoning              the AI's explanation (or a note that the AI was unavailable)
       human_review_required  True if the AI failed, is unsure, or asked for a human
       review_reasons, attempts, errors   details for debugging / display
@@ -68,6 +80,7 @@ def analyze_text_report(
             "disaster_type": a["disaster_type"],
             "severity": a["severity"],
             "confidence": a["confidence"],
+            "priority_score": _priority_score(a["severity"]),
             "reasoning": a["reasoning"],
             "human_review_required": outcome["needs_human_review"],
             "review_reasons": outcome["review_reasons"],
@@ -84,6 +97,7 @@ def analyze_text_report(
         "disaster_type": guess,
         "severity": None,
         "confidence": None,
+        "priority_score": None,
         "reasoning": note,
         "human_review_required": True,
         "review_reasons": outcome["review_reasons"],
@@ -97,5 +111,6 @@ def apply_to_report(report, result: dict) -> None:
     report.disaster_type = result["disaster_type"]
     report.severity = result["severity"]
     report.confidence = result["confidence"]
+    report.priority_score = result["priority_score"]
     report.ai_reasoning = result["reasoning"]
     report.human_review_required = result["human_review_required"]
