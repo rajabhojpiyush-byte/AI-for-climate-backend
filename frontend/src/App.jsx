@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { IncidentProvider } from './context/IncidentContext';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { IncidentProvider, useIncidents } from './context/IncidentContext';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import Home from './pages/Home';
@@ -9,6 +9,16 @@ import ReportSuccess from './pages/ReportSuccess';
 import TrackReport from './pages/TrackReport';
 import AuthorityLogin from './pages/AuthorityLogin';
 import Dashboard from './pages/Dashboard';
+
+// Route Guard: Ensures only authenticated / registered officers access the command dashboard
+function ProtectedDashboard() {
+  const { auth } = useIncidents();
+  const location = useLocation();
+  if (!auth) {
+    return <Navigate to="/authority-login" state={{ from: location }} replace />;
+  }
+  return <Dashboard />;
+}
 
 export default function App() {
   // Default to light theme with aesthetic pastel palette
@@ -37,7 +47,7 @@ export default function App() {
   return (
     <IncidentProvider>
       <Router>
-        <div className="min-h-screen flex flex-col font-sans transition-colors duration-300 bg-(--bg-main)-[var(--text-main)] relative selection:bg-purple-200 selection:text-purple-900">
+        <div className="min-h-screen flex flex-col font-sans transition-colors duration-300 bg-(--bg-main) text-(--text-main) relative selection:bg-purple-200 selection:text-purple-900">
           <Navbar theme={theme} toggleTheme={toggleTheme} />
           <main className="flex-1 pt-24 sm:pt-28 pb-12 px-3 sm:px-6">
             <Routes>
@@ -46,7 +56,7 @@ export default function App() {
               <Route path="/report/success" element={<ReportSuccess />} />
               <Route path="/track" element={<TrackReport />} />
               <Route path="/authority-login" element={<AuthorityLogin />} />
-              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/dashboard" element={<ProtectedDashboard />} />
             </Routes>
           </main>
           <Footer />
