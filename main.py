@@ -5,12 +5,14 @@ from sqlalchemy.orm import Session
 from datetime import datetime
 import os
 import json
+import asyncio
 
 from database import engine, Base, get_db
 from models import Report
 from schemas import ReportUpdate
 from routers.reports_dashboard import router as dashboard_router
-from ai.nugen_client import analyze_disaster_report
+from ai_service import analyze_text_report, apply_to_report
+from duplicate_detection import check_and_flag_duplicate
 
 # Ensure uploads directory exists
 os.makedirs("uploads", exist_ok=True)
@@ -43,75 +45,22 @@ app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 app.include_router(dashboard_router)
 
 
-# Root check
-
 # Preview AI Analysis before final submit
 @app.post("/analyze-preview")
 async def analyze_preview(
     description: str = Form(...)
 ):
-    try:
-        ai_response = analyze_disaster_report(description)
-        cleaned_response = ai_response.strip()
-        if cleaned_response.startswith("```"):
-            cleaned_response = cleaned_response.replace("```json", "").replace("```", "").strip()
-        ai_data = json.loads(cleaned_response)
-        return {
-            "status": "Success",
-            "disaster_type": ai_data.get("disaster_category") or ai_data.get("disaster_type") or ai_data.get("category"),
-            "severity": ai_data.get("severity", "MODERATE"),
-            "confidence": ai_data.get("confidence", 85),
-            "reasoning": ai_data.get("reasoning") or ai_data.get("explanation", "AI analysis completed."),
-            "human_review_required": ai_data.get("human_review_required", True)
-        }
-    except Exception as e:
-        print("Preview AI Analysis error:", e)
-        text_lower = description.lower()
-        if any(w in text_lower for w in ['quake', 'tremor', 'earthquake', 'shaking', 'collapsed', 'rubble', 'seismic']):
-            return {
-                "status": "Fallback",
-                "disaster_type": "Earthquake / Structural Damage",
-                "severity": "CRITICAL",
-                "confidence": 92,
-                "reasoning": "Seismic tremor and structural collapse keywords identified from witness account.",
-                "human_review_required": True
-            }
-        elif any(w in text_lower for w in ['fire', 'flame', 'smoke', 'wildfire', 'burn']):
-            return {
-                "status": "Fallback",
-                "disaster_type": "Wildfire / Urban Fire",
-                "severity": "CRITICAL",
-                "confidence": 90,
-                "reasoning": "Combustion plumes and active flame keywords detected.",
-                "human_review_required": True
-            }
-        elif any(w in text_lower for w in ['landslide', 'mudslide', 'rockfall', 'ghat', 'boulder']):
-            return {
-                "status": "Fallback",
-                "disaster_type": "Landslide / Debris Flow",
-                "severity": "HIGH",
-                "confidence": 88,
-                "reasoning": "Geological displacement and slope destabilization indicators present.",
-                "human_review_required": True
-            }
-        elif any(w in text_lower for w in ['flood', 'water', 'submerged', 'inundat', 'drown', 'river', 'rain']):
-            return {
-                "status": "Fallback",
-                "disaster_type": "Flood / Water Inundation",
-                "severity": "CRITICAL",
-                "confidence": 94,
-                "reasoning": "Inundation and severe water accumulation indicators detected.",
-                "human_review_required": True
-            }
-        else:
-            return {
-                "status": "Fallback",
-                "disaster_type": "General Climate Emergency",
-                "severity": "MODERATE",
-                "confidence": 75,
-                "reasoning": "Incident reported with preliminary observation markers.",
-                "human_review_required": True
-            }
+    ai_result = await asyncio.to_thread(analyze_text_report, description)
+    return {
+        "status": ai_result["ai_status"],
+        "disaster_type": ai_result["disaster_type"],
+        "severity": ai_result["severity"],
+        "confidence": ai_result["confidence"],
+        "priority_score": ai_result["priority_score"],
+        "reasoning": ai_result["reasoning"],
+        "human_review_required": ai_result["human_review_required"],
+        "review_reasons": ai_result.get("review_reasons", []),
+    }
 
 
 @app.get("/")
@@ -149,53 +98,31 @@ async def create_report(
         image=image_path
     )
 
-    # Run AI analysis
-    ai_status = "Failed"
-    try:
-        ai_response = analyze_disaster_report(description)
-
-        # Convert AI response into JSON
-        cleaned_response = ai_response.strip()
-        if cleaned_response.startswith("```"):
-            cleaned_response = cleaned_response.replace("```json", "").replace("```", "").strip()
-
-        ai_data = json.loads(cleaned_response)
-
-        # Save AI results
-        new_report.disaster_type = (
-            ai_data.get("disaster_category")
-            or ai_data.get("disaster_type")
-            or ai_data.get("category")
-        )
-        new_report.severity = ai_data.get("severity")
-        new_report.confidence = ai_data.get("confidence")
-        new_report.ai_reasoning = (
-            ai_data.get("reasoning")
-            or ai_data.get("explanation")
-        )
-        new_report.human_review_required = ai_data.get("human_review_required", True)
-        ai_status = "Success"
-
-    except Exception as e:
-        print("AI Analysis Error:", str(e))
-        new_report.human_review_required = True
-        new_report.ai_reasoning = "AI analysis unavailable. Manual review required."
+    # Run AI analysis safely (validation, retries, keyword fallback)
+    ai_result = await asyncio.to_thread(analyze_text_report, description)
+    apply_to_report(new_report, ai_result)
 
     # Save report in database
     db.add(new_report)
     db.commit()
     db.refresh(new_report)
 
+    # Check for duplicate reports and flag if found
+    duplicate_info = check_and_flag_duplicate(db, new_report)
+
     return {
         "message": "Report created successfully",
         "report_id": new_report.id,
         "image": image_path,
-        "ai_analysis_status": ai_status,
+        "ai_analysis_status": ai_result["ai_status"],
         "disaster_type": new_report.disaster_type,
         "severity": new_report.severity,
         "confidence": new_report.confidence,
+        "priority_score": new_report.priority_score,
         "ai_reasoning": new_report.ai_reasoning,
-        "human_review_required": new_report.human_review_required
+        "human_review_required": new_report.human_review_required,
+        "is_duplicate": new_report.is_duplicate,
+        "duplicate_info": duplicate_info,
     }
 
 
