@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Search, CheckCircle2, AlertTriangle, MapPin } from 'lucide-react';
+import { Search, CheckCircle2, AlertTriangle, MapPin, Loader2 } from 'lucide-react';
 import { useIncidents } from '../context/IncidentContext';
+import { fetchReportByIdAPI } from '../services/api';
 
 export default function TrackReport() {
   const [searchParams] = useSearchParams();
@@ -9,20 +10,43 @@ export default function TrackReport() {
   const [queryId, setQueryId] = useState(searchParams.get('id') || '');
   const [activeReport, setActiveReport] = useState(null);
 
+  const [isSearching, setIsSearching] = useState(false);
+
   useEffect(() => {
     const idFromUrl = searchParams.get('id');
     if (idFromUrl) {
       setQueryId(idFromUrl);
       const found = incidents.find(i => i.id.toLowerCase() === idFromUrl.toLowerCase());
-      if (found) setActiveReport(found);
+      if (found) {
+        setActiveReport(found);
+      } else {
+        fetchReportByIdAPI(idFromUrl).then(rep => {
+          if (rep) setActiveReport(rep);
+        }).catch(() => {});
+      }
     }
   }, [searchParams, incidents]);
 
-  const handleSearch = (e) => {
+  const handleSearch = async (e) => {
     e.preventDefault();
-    if (!queryId.trim()) return;
-    const found = incidents.find(i => i.id.toLowerCase() === queryId.trim().toLowerCase());
-    setActiveReport(found || 'NOT_FOUND');
+    const cleanId = queryId.trim();
+    if (!cleanId) return;
+
+    const found = incidents.find(i => i.id.toLowerCase() === cleanId.toLowerCase());
+    if (found) {
+      setActiveReport(found);
+      return;
+    }
+
+    setIsSearching(true);
+    try {
+      const rep = await fetchReportByIdAPI(cleanId);
+      setActiveReport(rep || 'NOT_FOUND');
+    } catch {
+      setActiveReport('NOT_FOUND');
+    } finally {
+      setIsSearching(false);
+    }
   };
 
   const steps = [
