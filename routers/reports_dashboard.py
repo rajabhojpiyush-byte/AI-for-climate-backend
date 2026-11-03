@@ -38,6 +38,8 @@ class ReportOut(BaseModel):
     is_duplicate: bool
     priority_score: Optional[float]
     status: str
+    ai_reasoning: Optional[str] = None
+    human_review_required: Optional[bool] = None
 
     class Config:
         from_attributes = True
@@ -109,6 +111,21 @@ def dashboard_high_priority(
         db.query(Report)
         .filter(Report.status != "Resolved", Report.is_duplicate == False)  # noqa: E712
         .order_by(desc(Report.priority_score))
+        .limit(limit)
+        .all()
+    )
+
+# ---------- GET /dashboard/needs-review ----------
+
+@router.get("/dashboard/needs-review", response_model=List[ReportOut])
+def dashboard_needs_review(
+    db: Session = Depends(get_db),
+    limit: int = Query(50, le=200),
+):
+    return (
+        db.query(Report)
+        .filter(Report.human_review_required == True, Report.status == "Pending")  # noqa: E712
+        .order_by(desc(Report.timestamp))
         .limit(limit)
         .all()
     )
