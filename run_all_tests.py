@@ -3,7 +3,7 @@ ResQAI — Master Offline Test Suite Runner
 
 Runs all self-contained tests across validation, safe client,
 duplicate detection, severity heuristics, priority calculations,
-and the 19 AI test scenarios (using the mock keyword provider).
+2G/3G low-bandwidth optimizations, and the 19 AI test scenarios.
 
 No API keys or network connection required.
 Run with:  python run_all_tests.py
@@ -19,6 +19,7 @@ TEST_MODULES = [
     ("Safe AI Service Integration", "test_ai_service.py"),
     ("Disaster Severity Rules", "test_severity.py"),
     ("Priority Scoring & Queueing", "test_priority.py"),
+    ("2G/3G Low-Bandwidth & WAL Concurrency", "test_low_bandwidth.py"),
 ]
 
 

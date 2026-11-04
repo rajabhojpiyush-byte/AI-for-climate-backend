@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Depends, UploadFile, File, Form, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from datetime import datetime
@@ -14,6 +15,9 @@ from routers.reports_dashboard import router as dashboard_router
 from ai_service import analyze_text_report, apply_to_report
 from duplicate_detection import check_and_flag_duplicate
 
+# Maximum allowed file upload size: 10MB (protects server on slow 2G/3G connections)
+MAX_UPLOAD_SIZE = 10 * 1024 * 1024
+
 # Ensure uploads directory exists
 os.makedirs("uploads", exist_ok=True)
 
@@ -23,7 +27,10 @@ Base.metadata.create_all(bind=engine)
 # Create FastAPI app
 app = FastAPI(title="AI Disaster Report System")
 
-# 1. CORS Configuration (Allows frontend to talk to backend)
+# 1. GZip Compression: Compresses all responses > 1KB by 70-80% for 2G/3G networks
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+
+# 2. CORS Configuration (Allows frontend to talk to backend)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -31,6 +38,7 @@ app.add_middleware(
         "http://localhost:3000",
         "http://127.0.0.1:5173",
         "http://127.0.0.1:3000",
+        "https://resq-ai-zeta.vercel.app",  # Production frontend
         "*",  # During hackathon development, allows any origin
     ],
     allow_credentials=True,
@@ -38,11 +46,56 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 2. Serve uploaded images so the frontend can display them
+# 3. Serve uploaded images so the frontend can display them
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
-# 3. Include dashboard routes (only once!)
+# 4. Include dashboard routes (only once!)
 app.include_router(dashboard_router)
+
+
+def save_optimized_image(raw_bytes: bytes, original_filename: str) -> str:
+    """
+    Saves an uploaded photo. If Pillow is installed, automatically resizes
+    large images to max 1280px and compresses to quality 75 JPEG to drastically
+    reduce bandwidth usage when viewed on 2G/3G connections.
+    """
+    timestamp = int(datetime.utcnow().timestamp())
+    filename = f"{timestamp}_{original_filename}"
+    target_path = f"uploads/{filename}"
+
+    try:
+        from PIL import Image
+        import io
+
+        img = Image.open(io.BytesIO(raw_bytes))
+        if img.mode in ("RGBA", "P"):
+            img = img.convert("RGB")
+
+        # Downscale if exceeding 1280px on the longest side
+        max_dim = 1280
+        if max(img.width, img.height) > max_dim:
+            img.thumbnail((max_dim, max_dim), Image.Resampling.LANCZOS)
+
+        clean_name = f"{timestamp}_{os.path.splitext(original_filename)[0]}.jpg"
+        target_path = f"uploads/{clean_name}"
+        img.save(target_path, "JPEG", optimize=True, quality=75)
+        return target_path
+    except Exception:
+        # Fallback: Save original bytes directly
+        with open(target_path, "wb") as f:
+            f.write(raw_bytes)
+        return target_path
+
+
+# Fast lightweight healthcheck for 2G/3G offline sync probes (< 50 bytes)
+@app.get("/ping")
+def ping():
+    return {"status": "ok"}
+
+
+@app.get("/")
+def home():
+    return {"message": "Disaster Report Backend is running!"}
 
 
 # Preview AI Analysis before final submit
@@ -63,11 +116,6 @@ async def analyze_preview(
     }
 
 
-@app.get("/")
-def home():
-    return {"message": "Disaster Report Backend is running!"}
-
-
 # Create a new report + image upload + AI analysis
 @app.post("/reports", status_code=status.HTTP_201_CREATED)
 async def create_report(
@@ -80,14 +128,15 @@ async def create_report(
 ):
     image_path = None
 
-    # Save uploaded image
+    # Handle image upload with size limit and automatic server-side compression
     if image and image.filename:
-        # Prepend timestamp to avoid file name collisions
-        filename = f"{int(datetime.utcnow().timestamp())}_{image.filename}"
-        image_path = f"uploads/{filename}"
-
-        with open(image_path, "wb") as file:
-            file.write(await image.read())
+        content = await image.read()
+        if len(content) > MAX_UPLOAD_SIZE:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail="Image exceeds 10MB limit. Please upload a smaller image."
+            )
+        image_path = save_optimized_image(content, image.filename)
 
     # Create report
     new_report = Report(
