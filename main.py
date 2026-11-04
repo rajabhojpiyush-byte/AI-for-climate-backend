@@ -10,7 +10,7 @@ import asyncio
 
 from database import engine, Base, get_db
 from models import Report
-from schemas import ReportUpdate
+from schemas import ReportUpdate, BatchSyncRequest
 from routers.reports_dashboard import router as dashboard_router
 from ai_service import analyze_text_report, apply_to_report
 from duplicate_detection import check_and_flag_duplicate
@@ -172,6 +172,67 @@ async def create_report(
         "human_review_required": new_report.human_review_required,
         "is_duplicate": new_report.is_duplicate,
         "duplicate_info": duplicate_info,
+    }
+
+
+# Offline Batch Sync: Allows 2G/offline clients to upload multiple queued reports in 1 single compressed request
+@app.post("/reports/sync-batch", status_code=status.HTTP_200_OK)
+async def sync_offline_reports(
+    batch: BatchSyncRequest,
+    db: Session = Depends(get_db)
+):
+    if not batch.reports:
+        return {
+            "message": "No reports to sync",
+            "synced_count": 0,
+            "duplicates_count": 0,
+            "results": []
+        }
+
+    results = []
+    duplicates_count = 0
+
+    for item in batch.reports:
+        # Create report row
+        new_report = Report(
+            description=item.description,
+            latitude=item.latitude,
+            longitude=item.longitude,
+            timestamp=item.timestamp,
+            image=None
+        )
+
+        # Run safe AI pipeline
+        ai_result = await asyncio.to_thread(analyze_text_report, item.description)
+        apply_to_report(new_report, ai_result)
+
+        # Save to database
+        db.add(new_report)
+        db.commit()
+        db.refresh(new_report)
+
+        # Check for duplicates across existing database
+        duplicate_info = check_and_flag_duplicate(db, new_report)
+        if new_report.is_duplicate:
+            duplicates_count += 1
+
+        results.append({
+            "client_id": item.client_id,
+            "report_id": new_report.id,
+            "status": "Success",
+            "disaster_type": new_report.disaster_type,
+            "severity": new_report.severity,
+            "priority_score": new_report.priority_score,
+            "is_duplicate": new_report.is_duplicate,
+            "duplicate_info": duplicate_info,
+            "human_review_required": new_report.human_review_required,
+        })
+
+    return {
+        "message": f"Successfully synced {len(results)} offline reports",
+        "synced_count": len(results),
+        "duplicates_count": duplicates_count,
+        "results": results
     }
 
 
