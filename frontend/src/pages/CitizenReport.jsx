@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { API_BASE_URL } from '../config';
 
 import { useNavigate } from 'react-router-dom';
 
@@ -48,56 +49,89 @@ export default function CitizenReport() {
 
 
   // Form State
-
   const [description, setDescription] = useState('');
-
-  const [imagePreview, setImagePreview] = useState(DEMO_PRESETS[0].url);
+  const [imagePreview, setImagePreview] = useState(null);
   const [selectedFile, setSelectedFile] = useState(null);
 
+  // Live real-time AI interpretation as user enters data
+  const [liveInterpretation, setLiveInterpretation] = useState(null);
+  const [isLiveAnalyzing, setIsLiveAnalyzing] = useState(false);
+
   const [location, setLocation] = useState({
-
     latitude: 18.5204,
-
     longitude: 73.8567,
-
     address: 'Pune Municipal Zone, Maharashtra'
-
   });
 
   const [isLocating, setIsLocating] = useState(false);
 
-
-
-  // AI Verification Output
-
+  // AI Verification Output (dynamically populated from backend)
   const [aiResult, setAiResult] = useState({
-
-    disasterType: 'Flood / Flash Inundation',
-
-    confidenceScore: 0.95,
-
-    severity: 'CRITICAL',
-
-    priority: 'P1',
-
-    extractedTags: ['submerged-vehicles', 'rapid-water-rise', 'residential-threat'],
-
-    explanation: 'Cross-modal image inspection detected submerged street infrastructure and vehicle hulls. Description matches severe flood ingress criteria.'
-
+    disasterType: 'Awaiting Analysis',
+    confidenceScore: 0.90,
+    severity: 'MODERATE',
+    priority: 'P3',
+    extractedTags: ['witness-report', 'awaiting-ai'],
+    explanation: 'Describe what you are witnessing. Real-time AI will interpret and classify the crisis.'
   });
+
+  // Debounced Real-time AI interpretation as user types
+  useEffect(() => {
+    if (!description || description.trim().length < 4) {
+      setLiveInterpretation(null);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setIsLiveAnalyzing(true);
+      try {
+        const preview = await analyzePreviewAPI(description);
+        setLiveInterpretation(preview);
+
+        const rawSev = (preview.severity || 'HIGH').toUpperCase();
+        const priority = rawSev.includes('CRIT') ? 'P1' : (rawSev.includes('HIGH') ? 'P2' : (rawSev.includes('LOW') ? 'P4' : 'P3'));
+        
+        let tags = ['ai-verified', 'realtime-stream'];
+        const textLower = (description + ' ' + (preview.disaster_type || '')).toLowerCase();
+        if (textLower.includes('earthquake') || textLower.includes('quake') || textLower.includes('tremor') || textLower.includes('seismic')) {
+          tags = ['seismic-tremor', 'structural-collapse', 'aftershock-risk'];
+        } else if (textLower.includes('fire') || textLower.includes('smoke') || textLower.includes('flame')) {
+          tags = ['combustion-plume', 'rapid-spread', 'smoke-inhalation-risk'];
+        } else if (textLower.includes('landslide') || textLower.includes('mud') || textLower.includes('debris')) {
+          tags = ['geological-displacement', 'roadway-blockage', 'debris-flow'];
+        } else if (textLower.includes('cyclone') || textLower.includes('storm') || textLower.includes('wind')) {
+          tags = ['gale-force-winds', 'fallen-powerlines', 'tree-damage'];
+        } else if (textLower.includes('flood') || textLower.includes('water')) {
+          tags = ['water-hazard', 'submerged-infrastructure', 'flash-inundation'];
+        }
+
+        setAiResult({
+          disasterType: preview.disaster_type || 'Climate Emergency',
+          confidenceScore: preview.confidence ? (preview.confidence > 1 ? preview.confidence / 100 : preview.confidence) : 0.90,
+          severity: rawSev,
+          priority,
+          priorityScore: preview.priority_score || (priority === 'P1' ? 95 : 75),
+          extractedTags: tags,
+          explanation: preview.reasoning || 'Automated multi-modal analysis completed.'
+        });
+      } catch (err) {
+        console.warn('Real-time AI preview error:', err);
+      } finally {
+        setIsLiveAnalyzing(false);
+      }
+    }, 350);
+
+    return () => clearTimeout(timer);
+  }, [description]);
 
 
 
   const handleFileUpload = (e) => {
-
     const file = e.target.files[0];
-
     if (file) {
-
+      setSelectedFile(file);
       setImagePreview(URL.createObjectURL(file));
-
     }
-
   };
 
 
@@ -251,12 +285,16 @@ export default function CitizenReport() {
         imageFile: selectedFile
       });
 
+      const imageFinalUrl = res.image 
+        ? `${API_BASE_URL}/${res.image.replace(/^\//, '')}`
+        : imagePreview;
+
       createdIncident = {
         id: `INC-${res.report_id}`,
         rawId: res.report_id,
         disasterType: res.disaster_type || aiResult.disasterType,
         description: description || 'Eyewitness emergency report with camera capture.',
-        imageUrl: res.image ? `http://localhost:8000/${res.image}` : imagePreview,
+        imageUrl: imageFinalUrl,
         location,
         incidentTime: new Date().toISOString(),
         status: 'Reported',
@@ -264,8 +302,8 @@ export default function CitizenReport() {
           confidenceScore: res.confidence ? (res.confidence > 1 ? res.confidence / 100 : res.confidence) : 0.92,
           severity: res.severity || aiResult.severity,
           priorityLevel: (res.severity?.toUpperCase() === 'CRITICAL' || res.severity?.toUpperCase() === 'HIGH') ? 'P1' : 'P2',
-          priorityScore: 90,
-          isDuplicate: false,
+          priorityScore: res.priority_score || (aiResult.priority === 'P1' ? 95 : 75),
+          isDuplicate: Boolean(res.is_duplicate),
           aiReasoning: res.ai_reasoning || aiResult.explanation,
           humanReviewRequired: res.human_review_required ?? true,
           relatedIncidentIds: []
@@ -398,29 +436,56 @@ export default function CitizenReport() {
 
 
             {/* Description Textarea */}
-
             <div>
-
               <label className="block text-xs font-bold uppercase tracking-wider text-(--text-muted)">
-
                 What are you witnessing? * (Describe what is happening)
-
               </label>
-
               <textarea
-
                 rows="4"
-
                 value={description}
-
                 onChange={(e) => setDescription(e.target.value)}
-
                 placeholder="Example: Rising flood waters have cut off the main market road. Over 5 cars submerged and residents taking shelter on balconies..."
-
                 className="w-full p-4 rounded-2xl bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 text-sm text-(--text-main) focus:outline-none focus:border-purple-500 shadow-sm leading-relaxed"
-
               />
 
+              {/* REAL-TIME AI INTERPRETATION (AS USER ENTERS DATA) */}
+              <div className="mt-3">
+                {isLiveAnalyzing && (
+                  <div className="flex items-center gap-2 p-3.5 rounded-2xl bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800/40 text-xs font-semibold text-purple-700 dark:text-purple-300 animate-pulse">
+                    <Loader2 className="w-4 h-4 animate-spin text-purple-600 dark:text-purple-400" />
+                    <span>AI Neural Engine interpreting description in real time...</span>
+                  </div>
+                )}
+
+                {!isLiveAnalyzing && liveInterpretation && (
+                  <div className="p-4 rounded-2xl bg-purple-50/70 dark:bg-slate-900/90 border border-purple-300 dark:border-purple-600/40 shadow-sm space-y-2.5">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center gap-2">
+                        <Sparkles className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                        <span className="text-xs font-black uppercase tracking-wider text-(--text-main)">
+                          Live AI Interpretation: <span className="text-purple-600 dark:text-purple-400 font-extrabold">{liveInterpretation.disaster_type}</span>
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-black uppercase ${
+                          (liveInterpretation.severity || '').toLowerCase() === 'critical' ? 'bg-red-500/15 text-red-600 dark:text-red-400 border border-red-500/30' :
+                          (liveInterpretation.severity || '').toLowerCase() === 'high' ? 'bg-orange-500/15 text-orange-600 dark:text-orange-400 border border-orange-500/30' :
+                          (liveInterpretation.severity || '').toLowerCase() === 'low' ? 'bg-green-500/15 text-green-600 dark:text-green-400 border border-green-500/30' :
+                          'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30'
+                        }`}>
+                          {liveInterpretation.severity} ({liveInterpretation.priority_score ?? 50}/100)
+                        </span>
+                        <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                          {Math.round(liveInterpretation.confidence ? (liveInterpretation.confidence > 1 ? liveInterpretation.confidence : liveInterpretation.confidence * 100) : 85)}% Confidence
+                        </span>
+                      </div>
+                    </div>
+                    <p className="text-xs text-(--text-muted) leading-relaxed">
+                      {liveInterpretation.reasoning}
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
 
 
@@ -532,11 +597,8 @@ export default function CitizenReport() {
                       type="button"
 
                       onClick={() => {
-
                         setImagePreview(p.url);
-
-                        if (!description) setDescription(p.desc);
-
+                        setDescription(p.desc);
                       }}
 
                       className="px-3.5 py-1.5 rounded-xl bg-white dark:bg-slate-900 hover:border-purple-500 text-xs font-semibold text-(--text-main) border border-slate-300 dark:border-slate-700 shadow-sm transition tactile-spring cursor-pointer"

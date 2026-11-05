@@ -9,8 +9,12 @@ export const IncidentProvider = ({ children }) => {
   const [error, setError] = useState(null);
 
   const [auth, setAuth] = useState(() => {
-    const user = localStorage.getItem('resqai_authority_user');
-    return user ? JSON.parse(user) : null;
+    try {
+      const user = sessionStorage.getItem('resqai_authority_user');
+      return user ? JSON.parse(user) : null;
+    } catch {
+      return null;
+    }
   });
 
   // Load live reports from FastAPI backend
@@ -65,9 +69,34 @@ export const IncidentProvider = ({ children }) => {
 
   const login = (username, password) => {
     if (username && password) {
-      const user = { name: "Commander Rao", role: "Emergency Operations Chief", username };
+      const registered = localStorage.getItem('resqai_registered_users');
+      const usersList = registered ? JSON.parse(registered) : [];
+      const matched = usersList.find(u => u.username.toLowerCase() === username.trim().toLowerCase() && u.password === password);
+
+      const user = matched
+        ? { name: matched.name, role: matched.role || "Emergency Response Lead", username: matched.username }
+        : { name: username === "responder.chief" ? "Commander Rao" : username, role: "Emergency Operations Chief", username };
+      
       setAuth(user);
-      localStorage.setItem('resqai_authority_user', JSON.stringify(user));
+      sessionStorage.setItem('resqai_authority_user', JSON.stringify(user));
+      localStorage.removeItem('resqai_authority_user');
+      return true;
+    }
+    return false;
+  };
+
+  const signup = (name, role, username, password) => {
+    if (name && username && password) {
+      const newUser = { name, role: role || "First Responder Lead", username: username.trim(), password };
+      const registered = localStorage.getItem('resqai_registered_users');
+      const usersList = registered ? JSON.parse(registered) : [];
+      usersList.push(newUser);
+      localStorage.setItem('resqai_registered_users', JSON.stringify(usersList));
+
+      const sessionUser = { name, role: newUser.role, username: newUser.username };
+      setAuth(sessionUser);
+      sessionStorage.setItem('resqai_authority_user', JSON.stringify(sessionUser));
+      localStorage.removeItem('resqai_authority_user');
       return true;
     }
     return false;
@@ -75,6 +104,7 @@ export const IncidentProvider = ({ children }) => {
 
   const logout = () => {
     setAuth(null);
+    sessionStorage.removeItem('resqai_authority_user');
     localStorage.removeItem('resqai_authority_user');
   };
 
@@ -88,6 +118,7 @@ export const IncidentProvider = ({ children }) => {
       updateStatus,
       auth,
       login,
+      signup,
       logout
     }}>
       {children}
