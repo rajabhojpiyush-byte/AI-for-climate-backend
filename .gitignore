@@ -8,6 +8,10 @@ ENV/
 
 # Database & Uploads
 disaster.db
+disaster.db*
+*.db
+*.db-shm
+*.db-wal
 *.sqlite
 *.sqlite3
 uploads/

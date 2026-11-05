@@ -21,6 +21,7 @@ TEST_MODULES = [
     ("Priority Scoring & Queueing", "test_priority.py"),
     ("2G/3G Low-Bandwidth & WAL Concurrency", "test_low_bandwidth.py"),
     ("Offline Batch Sync Pipeline", "test_batch_sync.py"),
+    ("Disaster Verification & Prank Rejection", "test_verification.py"),
 ]
 
 

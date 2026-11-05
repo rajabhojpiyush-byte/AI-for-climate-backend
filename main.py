@@ -12,7 +12,7 @@ from database import engine, Base, get_db
 from models import Report
 from schemas import ReportUpdate, BatchSyncRequest
 from routers.reports_dashboard import router as dashboard_router
-from ai_service import analyze_text_report, apply_to_report
+from ai_service import analyze_text_report, analyze_report, apply_to_report
 from duplicate_detection import check_and_flag_duplicate
 
 # Maximum allowed file upload size: 10MB (protects server on slow 2G/3G connections)
@@ -156,11 +156,35 @@ def resolve_ai_interpretation(description: str, ai_result: dict = None, has_imag
 # Preview AI Analysis before final submit (Supports live interpretation as user types)
 @app.post("/analyze-preview")
 async def analyze_preview(
-    description: str = Form(...)
+    description: str = Form(...),
+    image: UploadFile = File(None)
 ):
-    ai_result = await asyncio.to_thread(analyze_text_report, description)
-    return resolve_ai_interpretation(description, ai_result)
+    image_bytes = None
+    image_filename = None
+    if image and hasattr(image, "filename") and image.filename:
+        image_bytes = await image.read()
+        image_filename = image.filename
 
+    ai_result = await asyncio.to_thread(
+        analyze_report,
+        description=description,
+        image_bytes=image_bytes,
+        image_filename=image_filename
+    )
+    return {
+        "is_valid": ai_result.get("is_valid", True),
+        "validation_message": ai_result.get("validation_message", "ok"),
+        "status": ai_result["ai_status"],
+        "disaster_type": ai_result["disaster_type"],
+        "severity": ai_result["severity"],
+        "confidence": ai_result["confidence"],
+        "priority_score": ai_result["priority_score"],
+        "reasoning": ai_result["reasoning"],
+        "visual_interpretation": ai_result.get("visual_interpretation"),
+        "extracted_tags": ai_result.get("extracted_tags", []),
+        "human_review_required": ai_result["human_review_required"],
+        "review_reasons": ai_result.get("review_reasons", []),
+    }
 
 
 # Create a new report + image upload + AI analysis
@@ -174,18 +198,41 @@ async def create_report(
     db: Session = Depends(get_db)
 ):
     image_path = None
+    raw_content = None
 
     # Handle image upload with size limit and automatic server-side compression
-    if image and image.filename:
-        content = await image.read()
-        if len(content) > MAX_UPLOAD_SIZE:
+    if image and hasattr(image, "filename") and image.filename:
+        raw_content = await image.read()
+        if len(raw_content) > MAX_UPLOAD_SIZE:
             raise HTTPException(
                 status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
                 detail="Image exceeds 10MB limit. Please upload a smaller image."
             )
-        image_path = save_optimized_image(content, image.filename)
+        image_path = save_optimized_image(raw_content, image.filename)
 
-    # Create report
+    # Run AI analysis & strict authenticity verification
+    ai_result = await asyncio.to_thread(
+        analyze_report,
+        description=description,
+        image_bytes=raw_content,
+        image_filename=image.filename if (image and hasattr(image, "filename")) else None
+    )
+
+    # PRANK / IRRELEVANT CHECK: If report is not valid, DO NOT persist into database!
+    if not ai_result.get("is_valid", True):
+        # Clean up uploaded image if saved
+        if image_path and os.path.exists(image_path):
+            try:
+                os.remove(image_path)
+            except Exception:
+                pass
+        rejection_detail = f"Please enter a valid disaster report. {ai_result.get('reasoning', '')}".strip()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=rejection_detail
+        )
+
+    # Create report in database only when verified as genuine
     new_report = Report(
         description=description,
         latitude=latitude,
@@ -194,8 +241,6 @@ async def create_report(
         image=image_path
     )
 
-    # Run AI analysis safely (validation, retries, keyword fallback)
-    ai_result = await asyncio.to_thread(analyze_text_report, description)
     apply_to_report(new_report, ai_result)
 
     # Guarantee report has complete AI data even if external API is unreachable
@@ -223,6 +268,7 @@ async def create_report(
         "message": "Report created successfully",
         "report_id": new_report.id,
         "image": image_path,
+        "is_valid": True,
         "ai_analysis_status": ai_result["ai_status"],
         "disaster_type": new_report.disaster_type,
         "severity": new_report.severity,
@@ -253,7 +299,24 @@ async def sync_offline_reports(
     duplicates_count = 0
 
     for item in batch.reports:
-        # Create report row
+        # Run safe AI pipeline and authenticity validation
+        ai_result = await asyncio.to_thread(analyze_report, description=item.description)
+
+        if not ai_result.get("is_valid", True):
+            results.append({
+                "client_id": item.client_id,
+                "report_id": None,
+                "status": f"Rejected: Please enter a valid disaster report. {ai_result.get('reasoning', '')}".strip(),
+                "disaster_type": None,
+                "severity": None,
+                "priority_score": None,
+                "is_duplicate": False,
+                "duplicate_info": None,
+                "human_review_required": True,
+            })
+            continue
+
+        # Create report row only for valid reports
         new_report = Report(
             description=item.description,
             latitude=item.latitude,
@@ -261,9 +324,6 @@ async def sync_offline_reports(
             timestamp=item.timestamp,
             image=None
         )
-
-        # Run safe AI pipeline
-        ai_result = await asyncio.to_thread(analyze_text_report, item.description)
         apply_to_report(new_report, ai_result)
 
         # Save to database
