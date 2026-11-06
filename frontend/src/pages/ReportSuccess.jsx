@@ -55,7 +55,9 @@ export default function ReportSuccess() {
           <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800">
             <span className="text-[10px] text-(--text-muted) font-bold uppercase block">Reliability Score</span>
             <span className="text-sm font-extrabold text-emerald-600 dark:text-emerald-400 mt-1 block">
-              {Math.round((incident.aiAnalysis?.confidenceScore || 0.94) * 100)}% Credibility
+              {incident.aiAnalysis?.confidenceScore != null
+                ? `${Math.round(incident.aiAnalysis.confidenceScore * 100)}% Credibility`
+                : 'AI Computed'}
             </span>
           </div>
         </div>

@@ -21,6 +21,18 @@ METAPHOR_PATTERNS = [
     r"\bdrowning\s+in\s+(debt|work|homework|paperwork|sorrow)\b",
     r"\bavalanche\s+of\s+(work|emails?|messages?|orders?)\b",
     r"\bon\s+fire\s+today\b",
+    r"\bshe['\"]?s?\s+(a|an)\s+(walking\s+)?(earthquake|disaster|storm|tornado)\b",
+    r"\bhe['\"]?s?\s+(a|an)\s+(walking\s+)?(earthquake|disaster|storm|tornado)\b",
+    r"\brelationship\s+(is\s+a\s+disaster|on\s+fire|flooding)\b",
+    r"\bmy\s+(life|day|week|month|year)\s+(is\s+a\s+disaster|on\s+fire)\b",
+    r"\btraffic\s+is\s+a\s+(disaster|flood|nightmare)\b",
+    r"\beconomy\s+(is|was)\s+(on\s+fire|flooding|a\s+disaster)\b",
+    r"\bsoccer\s+(game|match)\s+(is|was)\s+a\s+disaster\b",
+    r"\bparty\s+(was|is)\s+a\s+disaster\b",
+    r"\bcooking\s+(caused|is|made)\s+(a\s+)?(disaster|fire|explosion)\b",
+    r"\bwife['\"]?s?\s+cooking\b",
+    r"\bhusbands?['\"]?s?\s+cooking\b",
+    r"\bmom['\"]?s?\s+cooking\b",
 ]
 
 # Personal / school / work daily complaints (non-emergencies)
@@ -28,6 +40,7 @@ COMPLAINT_PATTERNS = [
     r"\b(assignment[s]?|homework|college\s+submission|syllabus|curriculum|lecture[s]?)\b",
     r"\b(too\s+many\s+assignments|assignments\s+to\s+do)\b",
     r"\b(boss\s+yelled|office\s+work|meeting\s+delayed|salary\s+late|appraisal)\b",
+    r"\b(traffic\s+jam|stuck\s+in\s+traffic|late\s+for\s+work)\b",
 ]
 
 # Prank, joke, and informal chatter indicators
@@ -35,6 +48,7 @@ PRANK_PATTERNS = [
     r"\b(lol|lmao|rofl|haha|hahaha|hehe|jk|just\s+kidding)\b",
     r"\b(this\s+is\s+a\s+prank|it['\"]?s\s+a\s+prank|just\s+a\s+prank|practical\s+joke)\b",
     r"\b(trolling|fake\s+report|just\s+testing|test\s+test|testing\s+123)\b",
+    r"\b(april\s+fool|april\s+fools)\b",
 ]
 
 # Spam and marketing indicators
@@ -50,6 +64,8 @@ PROMPT_INJECTION_PATTERNS = [
     r"\bdisregard\s+(all\s+)?previous\b",
     r"\byou\s+are\s+now\s+in\s+developer\s+mode\b",
     r"\bmark\s+this\s+report\s+as\s+critical\b",
+    r"\bact\s+as\s+(a\s+)?(different|new)\s+(ai|assistant|model)\b",
+    r"\bpretend\s+(you\s+are|to\s+be)\b",
 ]
 
 # Mundane everyday non-disaster questions and chatter
@@ -60,6 +76,19 @@ MUNDANE_PATTERNS = [
     r"\bwho\s+won\s+the\s+(match|game)\b",
     r"\bwhere\s+is\s+the\s+nearest\s+(restaurant|cinema|mall|hotel)\b",
     r"\bwhat\s+is\s+the\s+weather\s+like\b",
+    r"\bhello+\s*(there|world)?\s*[!.]*$",
+    r"\bgood\s+(morning|afternoon|evening|night)\s*[!.]*$",
+]
+
+# Clearly fictional / impossible scenarios
+FICTIONAL_PATTERNS = [
+    r"\b(alien[s]?|dragon[s]?|zombie[s]?|monster[s]?|vampire[s]?|wizard[s]?)\s+(attack|caus|destroy|burn|flood)\b",
+    r"\b(50|100|500|1000)\s*-?\s*foot\s+(wave|tsunami|flood|fire|lava)\b",
+    r"\bgod['\"]?s?\s+(wrath|punishment|anger)\s+caus(ed|ing)\b",
+    r"\bthe\s+(whole|entire)\s+(city|world|country|planet)\s+(is\s+)?(destroyed|gone|underwater|on\s+fire)\b",
+    r"\bapocalypse\b",
+    r"\bend\s+of\s+the\s+world\b",
+    r"\blava\s+(is\s+)?(consuming|destroying|covering)\s+the\s+(city|town|village)\b",
 ]
 
 # Disaster patterns (flexible sub-word regex to support compounds and colloquial eyewitness terms)
@@ -109,6 +138,29 @@ EMERGENCY_WORDS = [
 ]
 
 
+def _is_too_vague(text: str) -> bool:
+    """
+    Detect reports that mention disaster words in a purely abstract or generic way,
+    with no actual incident description (no location hint, no action words, no people, etc.)
+    """
+    clean = text.strip().lower()
+    # Too short to be a real report (less than 15 chars)
+    if len(clean) < 15:
+        return True
+
+    # Reports that are ONLY abstract statements about disasters with no incident details
+    pure_abstract = [
+        r"^disasters?\s+(are|is|can\s+be)\s+\w+",
+        r"^(floods?|fires?|earthquakes?|landslides?|storms?)\s+(are|is|can\s+be|causes?|destroy[s]?)\b",
+        r"^(floods?|fires?|earthquakes?)\s+\w{0,10}\s*[.!?]*$",  # single-word disaster statements
+    ]
+    for pat in pure_abstract:
+        if re.search(pat, clean):
+            return True
+
+    return False
+
+
 def check_heuristics(text: str, has_image: bool = False) -> Tuple[bool, Optional[str], Optional[str]]:
     """
     Rule-based check on description text.
@@ -152,6 +204,11 @@ def check_heuristics(text: str, has_image: bool = False) -> Tuple[bool, Optional
         if re.search(pat, clean):
             return False, None, "Everyday general inquiry detected. Please enter a valid disaster report."
 
+    # Check clearly fictional scenarios
+    for pat in FICTIONAL_PATTERNS:
+        if re.search(pat, clean):
+            return False, None, "Fictional or impossible scenario detected. Please enter a valid disaster report describing a real incident."
+
     # Contradiction check: e.g. "flood in the desert ... bone dry"
     if "flood" in clean and ("bone dry" in clean or "no rain for months" in clean or "desert" in clean and "no water" in clean):
         return False, None, "Contradictory environmental conditions detected. Please enter a valid disaster report."
@@ -168,6 +225,12 @@ def check_heuristics(text: str, has_image: bool = False) -> Tuple[bool, Optional
     for pat in COMPLAINT_PATTERNS:
         if re.search(pat, clean) and not matched_domains and not has_emergency_keyword:
             return False, None, "Everyday personal/academic complaint detected. This portal is strictly for disaster reporting."
+
+    # Check for purely abstract/generic disaster statements with no actual incident
+    if _is_too_vague(clean) and not has_emergency_keyword:
+        if has_image:
+            return True, "other", None
+        return False, None, "Report is too vague or abstract. Please describe a specific ongoing emergency incident."
 
     if not matched_domains and not has_emergency_keyword:
         if has_image:

@@ -128,15 +128,8 @@ def analyze_report(
         a = outcome["analysis"]
 
         # Check if AI model explicitly rejected as prank or invalid disaster
-        is_prank_or_joke = (
-            a.get("is_valid_disaster") is False and (
-                a.get("disaster_type") in ("none", "other", "unknown", None)
-                or "joke" in str(a.get("reasoning", "")).lower()
-                or "prank" in str(a.get("reasoning", "")).lower()
-                or "metaphor" in str(a.get("reasoning", "")).lower()
-                or "irrelevant" in str(a.get("reasoning", "")).lower()
-            )
-        )
+        # Stricter: reject ANY report where AI says is_valid_disaster=False
+        is_prank_or_joke = (a.get("is_valid_disaster") is False)
         if is_prank_or_joke:
             return {
                 "is_valid": False,

@@ -57,6 +57,14 @@ export default function App() {
               <Route path="/track" element={<TrackReport />} />
               <Route path="/authority-login" element={<AuthorityLogin />} />
               <Route path="/dashboard" element={<ProtectedDashboard />} />
+              <Route path="*" element={
+                <div className="max-w-lg mx-auto text-center py-24 space-y-4">
+                  <div className="text-6xl font-black text-(--text-muted) opacity-30">404</div>
+                  <h2 className="text-2xl font-black text-(--text-main)">Page Not Found</h2>
+                  <p className="text-sm text-(--text-muted)">This route doesn't exist in the ResQAI system.</p>
+                  <a href="/" className="inline-block mt-4 px-6 py-3 rounded-xl text-sm font-bold text-white bg-purple-600 hover:bg-purple-700 transition shadow-md">Go Home</a>
+                </div>
+              } />
             </Routes>
           </main>
           <Footer />

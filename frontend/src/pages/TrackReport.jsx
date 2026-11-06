@@ -113,8 +113,14 @@ export default function TrackReport() {
               </div>
             </div>
             <div className="text-right">
-              <span className="px-3 py-1 rounded-full text-xs font-bold bg-red-500/15 text-red-600 dark:text-red-400 border border-red-500/30">
-                {activeReport.aiAnalysis?.priorityLevel} CRITICAL
+              <span className={`px-3 py-1 rounded-full text-xs font-bold border ${
+                (activeReport.aiAnalysis?.severity || '').toUpperCase().includes('CRIT')
+                  ? 'bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/30'
+                  : (activeReport.aiAnalysis?.severity || '').toUpperCase().includes('HIGH')
+                  ? 'bg-orange-500/15 text-orange-600 dark:text-orange-400 border-orange-500/30'
+                  : 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30'
+              }`}>
+                {activeReport.aiAnalysis?.priorityLevel} {activeReport.aiAnalysis?.severity || 'MODERATE'}
               </span>
               <span className="block text-xs font-semibold text-(--text-muted) mt-2">
                 Status: <strong className="text-(--text-main)]">{activeReport.status}</strong>

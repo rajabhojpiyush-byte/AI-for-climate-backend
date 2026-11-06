@@ -8,7 +8,7 @@ import {
 import { useIncidents } from '../context/IncidentContext';
 
 export default function Dashboard() {
-  const { incidents, updateStatus, auth, logout } = useIncidents();
+  const { incidents, updateStatus, auth, logout, loading, error, refreshIncidents } = useIncidents();
   const navigate = useNavigate();
   const [priorityFilter, setPriorityFilter] = useState('ALL');
   const [statusFilter] = useState('ALL');
@@ -18,6 +18,7 @@ export default function Dashboard() {
   const [selectedIncident, setSelectedIncident] = useState(null);
   const [statusChoice, setStatusChoice] = useState('Under Review');
   const [logNote, setLogNote] = useState('');
+  const [updateSuccess, setUpdateSuccess] = useState(null);
 
   // KPIs
   const totalReports = incidents.length;
@@ -49,6 +50,8 @@ export default function Dashboard() {
     }));
     setLogNote('');
     alert(`Incident ${selectedIncident.id} updated to ${statusChoice}!`);
+    setUpdateSuccess(`✓ Incident ${selectedIncident.id} updated to "${statusChoice}"`);
+    setTimeout(() => setUpdateSuccess(null), 3500);
   };
 
   const handleSignOut = () => {
@@ -101,6 +104,20 @@ export default function Dashboard() {
           </Link>
         </div>
       </div>
+
+      {/* Backend status banners */}
+      {loading && (
+        <div className="flex items-center gap-2 p-3 rounded-xl bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800/40 text-purple-700 dark:text-purple-300 text-xs font-semibold animate-pulse">
+          <span className="w-2 h-2 rounded-full bg-purple-500 animate-ping shrink-0"></span>
+          Loading live incident feed from backend...
+        </div>
+      )}
+      {!loading && error && (
+        <div className="flex items-center justify-between gap-2 p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-700/40 text-amber-700 dark:text-amber-300 text-xs font-semibold">
+          <span>? Backend unreachable � showing cached data.</span>
+          <button onClick={refreshIncidents} className="px-2 py-1 rounded-lg bg-amber-100 dark:bg-amber-900/40 hover:bg-amber-200 border border-amber-300 dark:border-amber-600/30 font-bold cursor-pointer transition text-xs">Retry</button>
+        </div>
+      )}
 
       {/* KPI METRIC CARDS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -237,7 +254,9 @@ export default function Dashboard() {
                     <td className="py-3.5 px-4 text-(--text-muted) max-w-50 truncate">{inc.location?.address}</td>
                     <td className="py-3.5 px-4">
                       <span className="font-extrabold text-emerald-600 dark:text-emerald-400">
-                        {Math.round((inc.aiAnalysis?.confidenceScore || 0.9) * 100)}%
+                        {inc.aiAnalysis?.confidenceScore != null
+                          ? `${Math.round(inc.aiAnalysis.confidenceScore * 100)}%`
+                          : 'Computed'}
                       </span>
                     </td>
                     <td className="py-3.5 px-4">
@@ -312,7 +331,9 @@ export default function Dashboard() {
                   <div className="p-3 rounded-xl bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 shadow-xs">
                     <span className="text-[10px] text-(--text-muted) block">Credibility Index</span>
                     <span className="text-lg font-black text-emerald-600 dark:text-emerald-400">
-                      {Math.round((selectedIncident.aiAnalysis?.confidenceScore || 0.9) * 100)}%
+                      {selectedIncident.aiAnalysis?.confidenceScore != null
+                        ? `${Math.round(selectedIncident.aiAnalysis.confidenceScore * 100)}%`
+                        : 'Computed'}
                     </span>
                   </div>
                   <div className="p-3 rounded-xl bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 shadow-xs">

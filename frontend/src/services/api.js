@@ -37,7 +37,7 @@ export function formatReportToIncident(report) {
     incidentTime: report.timestamp || new Date().toISOString(),
     status: report.status || 'Reported',
     aiAnalysis: {
-      confidenceScore: (report.confidence ? (report.confidence > 1 ? report.confidence / 100 : report.confidence) : 0.90),
+      confidenceScore: report.confidence != null && report.confidence > 0 ? (report.confidence > 1 ? report.confidence / 100 : report.confidence) : null,
       severity: rawSev,
       priorityLevel,
       priorityScore,

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+﻿import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { fetchReportsAPI, updateReportStatusAPI } from '../services/api';
 
 const IncidentContext = createContext();
@@ -69,14 +69,18 @@ export const IncidentProvider = ({ children }) => {
 
   const login = (username, password) => {
     if (username && password) {
+      // Built-in demo authority credentials — always available without registration
+      const DEMO_ACCOUNTS = [
+        { name: 'Commander Rao', role: 'Emergency Operations Chief', username: 'responder.chief', password: 'emergency2026' },
+        { name: 'Officer Demo', role: 'Field Response Officer', username: 'demo', password: 'demo123' },
+      ];
       const registered = localStorage.getItem('resqai_registered_users');
-      const usersList = registered ? JSON.parse(registered) : [];
-      const matched = usersList.find(u => u.username.toLowerCase() === username.trim().toLowerCase() && u.password === password);
-
-      const user = matched
-        ? { name: matched.name, role: matched.role || "Emergency Response Lead", username: matched.username }
-        : { name: username === "responder.chief" ? "Commander Rao" : username, role: "Emergency Operations Chief", username };
-      
+      const usersList = [...DEMO_ACCOUNTS, ...(registered ? JSON.parse(registered) : [])];
+      const matched = usersList.find(
+        u => u.username.toLowerCase() === username.trim().toLowerCase() && u.password === password
+      );
+      if (!matched) return false;
+      const user = { name: matched.name, role: matched.role || 'Emergency Response Lead', username: matched.username };
       setAuth(user);
       sessionStorage.setItem('resqai_authority_user', JSON.stringify(user));
       localStorage.removeItem('resqai_authority_user');

@@ -55,7 +55,7 @@ SEVERITIES = {"low": "Low", "medium": "Medium", "moderate": "Medium",
               "high": "High", "critical": "Critical", "none": "Low"}
 
 # Results below this confidence are sent to a human instead of trusted
-LOW_CONFIDENCE_THRESHOLD = 50.0
+LOW_CONFIDENCE_THRESHOLD = 55.0
 
 
 class AIResponseError(Exception):

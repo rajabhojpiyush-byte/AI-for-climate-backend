@@ -15,7 +15,7 @@ import { useIncidents } from '../context/IncidentContext';
 
 import RealMap from '../components/map/RealMap';
 import { submitReportAPI, analyzePreviewAPI } from '../services/api';
-import { API_BASE_URL } from '../config';
+
 
 
 
@@ -72,7 +72,7 @@ export default function CitizenReport() {
   // AI Verification Output (dynamically populated from backend)
   const [aiResult, setAiResult] = useState({
     disasterType: 'Awaiting Analysis',
-    confidenceScore: 0.90,
+    confidenceScore: null,
     severity: 'MODERATE',
     priority: 'P3',
     extractedTags: ['witness-report', 'awaiting-ai'],
@@ -111,7 +111,7 @@ export default function CitizenReport() {
 
         setAiResult({
           disasterType: preview.disaster_type || 'Climate Emergency',
-          confidenceScore: preview.confidence ? (preview.confidence > 1 ? preview.confidence / 100 : preview.confidence) : 0.90,
+          confidenceScore: preview.confidence != null && preview.confidence > 0 ? (preview.confidence > 1 ? preview.confidence / 100 : preview.confidence) : null,
           severity: rawSev,
           priority,
           priorityScore: preview.priority_score || (priority === 'P1' ? 95 : 75),
@@ -201,7 +201,7 @@ export default function CitizenReport() {
 
       setAiResult({
         disasterType: preview.disaster_type || 'Disaster Incident',
-        confidenceScore: preview.confidence ? (preview.confidence > 1 ? preview.confidence / 100 : preview.confidence) : 0.92,
+        confidenceScore: preview.confidence != null && preview.confidence > 0 ? (preview.confidence > 1 ? preview.confidence / 100 : preview.confidence) : null,
         severity: rawSev,
         priority,
         extractedTags: Array.from(new Set(tags)),
@@ -236,10 +236,10 @@ export default function CitizenReport() {
       }
 
       let type = 'Climate Emergency';
-      let priority = 'P2';
-      let severity = 'HIGH';
-      let tags = ['climate-hazard', 'priority-triage'];
-      let explanation = 'Witness statement logged. Awaiting confirmation from responder teams.';
+      let priority = 'P3';
+      let severity = 'MEDIUM';
+      let tags = ['unverified-offline', 'manual-review-needed'];
+      let explanation = 'Offline mode: AI backend unavailable. Keyword-based pre-classification only. Manual verification required.';
 
       if (text.includes('earthquake') || text.includes('quake') || text.includes('tremor') || text.includes('shake') || text.includes('rubble') || text.includes('collapse')) {
         type = 'Earthquake / Structural Damage';
@@ -275,11 +275,11 @@ export default function CitizenReport() {
 
       setAiResult({
         disasterType: type,
-        confidenceScore: 0.94,
+        confidenceScore: 0.72,
         severity,
         priority,
         extractedTags: tags,
-        explanation
+        explanation: explanation + ' (Note: AI backend unavailable — offline keyword analysis only)'
       });
       setStep(2);
     } finally {
@@ -363,7 +363,7 @@ export default function CitizenReport() {
         incidentTime: new Date().toISOString(),
         status: 'Reported',
         aiAnalysis: {
-          confidenceScore: res.confidence ? (res.confidence > 1 ? res.confidence / 100 : res.confidence) : 0.92,
+          confidenceScore: res.confidence != null && res.confidence > 0 ? (res.confidence > 1 ? res.confidence / 100 : res.confidence) : null,
           severity: res.severity || aiResult.severity,
           priorityLevel: (res.severity?.toUpperCase() === 'CRITICAL' || res.severity?.toUpperCase() === 'HIGH') ? 'P1' : 'P2',
           priorityScore: res.priority_score || (aiResult.priority === 'P1' ? 95 : 75),
@@ -541,7 +541,9 @@ export default function CitizenReport() {
                           {liveInterpretation.severity} ({liveInterpretation.priority_score ?? 50}/100)
                         </span>
                         <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
-                          {Math.round(liveInterpretation.confidence ? (liveInterpretation.confidence > 1 ? liveInterpretation.confidence : liveInterpretation.confidence * 100) : 85)}% Confidence
+                          {liveInterpretation.confidence != null && liveInterpretation.confidence > 0
+                            ? `${Math.round(liveInterpretation.confidence > 1 ? liveInterpretation.confidence : liveInterpretation.confidence * 100)}% Confidence`
+                            : 'Analyzing...'}
                         </span>
                       </div>
                     </div>
@@ -795,7 +797,9 @@ export default function CitizenReport() {
 
                   <span className="px-3.5 py-1.5 rounded-full text-xs font-bold bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-500/30">
 
-                    {Math.round(aiResult.confidenceScore * 100)}% Confidence
+                    {aiResult.confidenceScore != null && aiResult.confidenceScore > 0
+                      ? `${Math.round(aiResult.confidenceScore * 100)}% Confidence`
+                      : 'AI Computed'}
 
                   </span>
 
