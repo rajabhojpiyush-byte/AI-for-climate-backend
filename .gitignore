@@ -1,0 +1,10 @@
+disaster.db
+venv/
+__pycache__/
+uploads/
+tempCodeRunnerFile.py
+.env
+venv/
+node_modules/
+frontend/node_modules/
+frontend/dist/
