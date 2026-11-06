@@ -1,4 +1,4 @@
-import ResQAILogo from './ui/ResQAILogo';
+﻿import ResQAILogo from './ui/ResQAILogo';
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { Shield, Activity, Radio, FileText, Search, ExternalLink } from 'lucide-react';
@@ -76,7 +76,7 @@ export default function Footer() {
       </div>
 
       <div className="max-w-7xl mx-auto pt-6 flex flex-col sm:flex-row items-center justify-between text-[11px] text-(--text-muted) gap-4">
-        <p>© 2026 ResQAI Disaster Intelligence Network. All operational rights reserved.</p>
+        <p>┬⌐ 2026 ResQAI Disaster Intelligence Network. All operational rights reserved.</p>
         <div className="flex gap-6">
           <span>Privacy & Citizen Safety Policy</span>
           <span>Terms of Emergency Use</span>

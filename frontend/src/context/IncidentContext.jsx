@@ -171,11 +171,17 @@ export const IncidentProvider = ({ children }) => {
   const [error, setError] = useState(null);
 
   const [auth, setAuth] = useState(() => {
-    const user = localStorage.getItem('resqai_authority_user');
-    return user ? JSON.parse(user) : null;
+    try {
+      const sessionUser = sessionStorage.getItem('resqai_authority_user');
+      if (sessionUser) return JSON.parse(sessionUser);
+      const localUser = localStorage.getItem('resqai_authority_user');
+      return localUser ? JSON.parse(localUser) : null;
+    } catch {
+      return null;
+    }
   });
 
-  // Load live reports from FastAPI backend; merge with ongoing Pune situations
+  // Load live reports from FastAPI backend; merge seamlessly with pre-seeded situations
   const refreshIncidents = useCallback(async () => {
     try {
       setLoading(true);
@@ -190,7 +196,7 @@ export const IncidentProvider = ({ children }) => {
       }
       setError(null);
     } catch (err) {
-      console.warn('Backend currently unreachable, using ongoing Pune situations:', err);
+      console.warn('Backend currently unreachable, using offline fallback:', err);
       setIncidents(prev => (prev && prev.length > 0 ? prev : ONGOING_PUNE_INCIDENTS));
       setError(err.message);
     } finally {
@@ -243,9 +249,38 @@ export const IncidentProvider = ({ children }) => {
 
   const login = (username, password) => {
     if (username && password) {
-      const user = { name: "Commander Rao", role: "Emergency Operations Chief", username };
+      // Built-in demo authority credentials — always available
+      const DEMO_ACCOUNTS = [
+        { name: 'Commander Rao', role: 'Emergency Operations Chief', username: 'responder.chief', password: 'emergency2026' },
+        { name: 'Officer Demo', role: 'Field Response Officer', username: 'demo', password: 'demo123' },
+      ];
+      const registered = localStorage.getItem('resqai_registered_users');
+      const usersList = [...DEMO_ACCOUNTS, ...(registered ? JSON.parse(registered) : [])];
+      const matched = usersList.find(
+        u => u.username.toLowerCase() === username.trim().toLowerCase() && u.password === password
+      );
+      if (!matched) return false;
+      const user = { name: matched.name, role: matched.role || 'Emergency Response Lead', username: matched.username };
       setAuth(user);
+      sessionStorage.setItem('resqai_authority_user', JSON.stringify(user));
       localStorage.setItem('resqai_authority_user', JSON.stringify(user));
+      return true;
+    }
+    return false;
+  };
+
+  const signup = (name, role, username, password) => {
+    if (name && username && password) {
+      const newUser = { name, role: role || "First Responder Lead", username: username.trim(), password };
+      const registered = localStorage.getItem('resqai_registered_users');
+      const usersList = registered ? JSON.parse(registered) : [];
+      usersList.push(newUser);
+      localStorage.setItem('resqai_registered_users', JSON.stringify(usersList));
+
+      const sessionUser = { name, role: newUser.role, username: newUser.username };
+      setAuth(sessionUser);
+      sessionStorage.setItem('resqai_authority_user', JSON.stringify(sessionUser));
+      localStorage.setItem('resqai_authority_user', JSON.stringify(sessionUser));
       return true;
     }
     return false;
@@ -253,6 +288,7 @@ export const IncidentProvider = ({ children }) => {
 
   const logout = () => {
     setAuth(null);
+    sessionStorage.removeItem('resqai_authority_user');
     localStorage.removeItem('resqai_authority_user');
   };
 
@@ -266,6 +302,7 @@ export const IncidentProvider = ({ children }) => {
       updateStatus,
       auth,
       login,
+      signup,
       logout
     }}>
       {children}

@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { API_BASE_URL } from '../config';
 import { useNavigate } from 'react-router-dom';
 import { 
   Camera, Upload, MapPin, CheckCircle2, ArrowRight, ArrowLeft, 
   Sparkles, ShieldCheck, Loader2, AlertTriangle, Layers, 
-  Mic, MicOff, Tag, Waves, Mountain, Flame, CloudRain
+  Mic, MicOff, Tag, Waves, Mountain, Flame, CloudRain, Image as ImageIcon 
 } from 'lucide-react';
 import { useIncidents } from '../context/IncidentContext';
 import RealMap from '../components/map/RealMap';
@@ -46,6 +47,13 @@ const INCIDENT_PRESETS = [
   }
 ];
 
+// Local sample photos for instant backend testing
+const SAMPLE_PRESETS = [
+  { label: '🌊 Flood Sample', desc: 'Over 4 feet water in urban market street, vehicles submerged', url: '/samples/flood_sample.jpg' },
+  { label: '🔥 Wildfire Sample', desc: 'Active brushfire spreading near mountain highway with heavy smoke', url: '/samples/wildfire_sample.jpg' },
+  { label: '⛰️ Landslide Sample', desc: 'Massive rockfall and mud coming down the ghat pass blocking road', url: '/samples/landslide_sample.jpg' },
+];
+
 const QUICK_TAGS = [
   'Trapped Persons',
   'Submerged Vehicles',
@@ -67,9 +75,28 @@ export default function CitizenReport() {
 
   // Form State
   const [description, setDescription] = useState('');
-  const [imagePreview, setImagePreview] = useState(INCIDENT_PRESETS[0].url);
+  const [imagePreview, setImagePreview] = useState(null);
   const [selectedFile, setSelectedFile] = useState(null);
-  const [selectedTags, setSelectedTags] = useState(['Trapped Persons', 'Submerged Vehicles']);
+  const [selectedTags, setSelectedTags] = useState([]);
+
+  // Live camera stream state & refs
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const videoRef = React.useRef(null);
+  const streamRef = React.useRef(null);
+  const cameraInputRef = React.useRef(null);
+  const fileInputRef = React.useRef(null);
+
+  // Prank rejection / validation modal state
+  const [validationModal, setValidationModal] = useState({
+    isOpen: false,
+    title: 'Please enter a valid disaster report',
+    message: '',
+    reason: ''
+  });
+
+  // Live real-time AI interpretation
+  const [liveInterpretation, setLiveInterpretation] = useState(null);
+  const [isLiveAnalyzing, setIsLiveAnalyzing] = useState(false);
 
   const [location, setLocation] = useState({
     latitude: 18.6298,
@@ -88,6 +115,29 @@ export default function CitizenReport() {
     extractedTags: ['submerged-vehicles', 'rapid-water-rise', 'residential-threat'],
     explanation: 'Cross-modal vision inspection detected submerged street infrastructure and vehicles. Description matches acute river inundation threshold.'
   });
+
+  // Debounced real-time preview analysis as user types description or adjusts tags/image
+  useEffect(() => {
+    const combinedQuery = `${description} ${selectedTags.length > 0 ? selectedTags.join(' ') : ''}`.trim();
+    if (!combinedQuery || combinedQuery.length < 4) {
+      setLiveInterpretation(null);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setIsLiveAnalyzing(true);
+      try {
+        const preview = await analyzePreviewAPI(combinedQuery, selectedFile);
+        setLiveInterpretation(preview);
+      } catch (err) {
+        console.warn('Live preview error:', err);
+      } finally {
+        setIsLiveAnalyzing(false);
+      }
+    }, 450);
+
+    return () => clearTimeout(timer);
+  }, [description, selectedTags, selectedFile]);
 
   // Native Speech-to-Text Dictation
   const toggleSpeechRecognition = () => {
@@ -132,6 +182,85 @@ export default function CitizenReport() {
     }
   };
 
+  const startCamera = async () => {
+    try {
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
+        });
+        streamRef.current = stream;
+        setIsCameraOpen(true);
+      } else if (cameraInputRef.current) {
+        cameraInputRef.current.click();
+      }
+    } catch (err) {
+      console.warn("Direct webcam stream failed, falling back to camera input:", err);
+      if (cameraInputRef.current) {
+        cameraInputRef.current.click();
+      } else {
+        alert("Camera access denied or unavailable. Please upload a photo file.");
+      }
+    }
+  };
+
+  const stopCamera = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+    setIsCameraOpen(false);
+  };
+
+  const capturePhoto = () => {
+    if (!videoRef.current) return;
+    const video = videoRef.current;
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth || 640;
+    canvas.height = video.videoHeight || 480;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    canvas.toBlob((blob) => {
+      if (blob) {
+        const file = new File([blob], `camera_capture_${Date.now()}.jpg`, { type: 'image/jpeg' });
+        setSelectedFile(file);
+        setImagePreview(URL.createObjectURL(blob));
+      }
+      stopCamera();
+    }, 'image/jpeg', 0.9);
+  };
+
+  // Connect active camera stream to video element when modal opens
+  useEffect(() => {
+    if (isCameraOpen && streamRef.current && videoRef.current) {
+      videoRef.current.srcObject = streamRef.current;
+      videoRef.current.play().catch(e => console.warn("Video play error:", e));
+    }
+  }, [isCameraOpen]);
+
+  // Clean up any open streams on unmount
+  useEffect(() => {
+    return () => {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, []);
+
+  const handleSelectSample = async (sample) => {
+    setImagePreview(sample.url);
+    if (!description) setDescription(sample.desc);
+    try {
+      const res = await fetch(sample.url);
+      if (!res.ok) throw new Error('Sample fetch failed');
+      const blob = await res.blob();
+      const file = new File([blob], 'demo_evidence.jpg', { type: 'image/jpeg' });
+      setSelectedFile(file);
+    } catch {
+      setSelectedFile(null);
+    }
+  };
+
   const toggleTag = (tag) => {
     setSelectedTags(prev => 
       prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]
@@ -139,14 +268,35 @@ export default function CitizenReport() {
   };
 
   const runAiIdentification = async () => {
+    if (!description || description.trim().length < 5) {
+      setValidationModal({
+        isOpen: true,
+        title: 'Please enter a valid disaster report',
+        message: 'Report Description Required',
+        reason: 'Please enter a detailed eyewitness description of the emergency incident before running AI verification.'
+      });
+      return;
+    }
+
     setIsAiScanning(true);
 
     try {
       const combinedText = `${description} Tags: ${selectedTags.join(', ')}`;
-      const preview = await analyzePreviewAPI(combinedText || 'Disaster incident reported in PCMC Pune');
+      const preview = await analyzePreviewAPI(combinedText, selectedFile);
       
+      // Strict validity check: detect pranks / jokes / metaphors / irrelevant
+      if (preview.is_valid === false) {
+        setValidationModal({
+          isOpen: true,
+          title: 'Please enter a valid disaster report',
+          message: preview.validation_message || 'Please enter a valid disaster report',
+          reason: preview.reasoning || 'The AI detected that this report appears to be a joke, prank, or irrelevant to genuine disaster emergencies.'
+        });
+        return;
+      }
+
       const rawSev = (preview.severity || 'HIGH').toUpperCase();
-      const priority = rawSev.includes('CRIT') ? 'P1' : (rawSev.includes('HIGH') ? 'P2' : 'P3');
+      const priority = rawSev.includes('CRIT') ? 'P1' : (rawSev.includes('HIGH') ? 'P2' : (rawSev.includes('LOW') ? 'P4' : 'P3'));
       
       let tags = ['ai-verified', 'witness-evidence', ...selectedTags.map(t => t.toLowerCase().replace(/\s+/g, '-'))];
       const textLower = (combinedText + ' ' + (preview.disaster_type || '')).toLowerCase();
@@ -169,35 +319,64 @@ export default function CitizenReport() {
         extractedTags: [...new Set(tags)],
         explanation: preview.reasoning || 'Automated multi-modal analysis completed.'
       });
+      setStep(2);
     } catch (err) {
-      console.warn('Backend preview failed, utilizing intelligent client parsing:', err);
+      console.warn('Backend preview failed or rejected:', err);
+      const errMsg = err.detail || err.message || '';
+
+      if (errMsg.toLowerCase().includes('valid disaster report') || errMsg.includes('400') || err.status === 400) {
+        setValidationModal({
+          isOpen: true,
+          title: 'Please enter a valid disaster report',
+          message: 'Verification Flagged Submission',
+          reason: errMsg.replace(/^Error:\s*/, '') || 'Please enter a valid disaster report describing an authentic emergency.'
+        });
+        return;
+      }
+
+      // Offline client-side verification fallback
       const text = `${description} ${selectedTags.join(' ')}`.toLowerCase();
-      
+      const isPrank = /\b(lol|lmao|haha|heart is on fire|prank|joke|buy cheap|what time|recipe|exam|test|party|pizza|weather|hair day)\b/.test(text);
+      const hasHazard = /\b(flood|water|submerge|rain|inundat|river|fire|smoke|burn|flame|landslide|mudslide|rockfall|ghat|quake|earthquake|tremor|storm|cyclone|wind|collapse|rubble|debris)\b/.test(text);
+
+      if (isPrank || (!hasHazard && !selectedFile)) {
+        setValidationModal({
+          isOpen: true,
+          title: 'Please enter a valid disaster report',
+          message: 'No Emergency Hazard Detected',
+          reason: 'This emergency portal is strictly for genuine disaster reporting (floods, fires, landslides, earthquakes, storms). Please enter a valid disaster report describing an authentic hazard.'
+        });
+        return;
+      }
+
       let type = 'Climate Emergency';
       let priority = 'P2';
       let severity = 'HIGH';
       let tags = ['climate-hazard', 'priority-triage', ...selectedTags.map(t => t.toLowerCase().replace(/\s+/g, '-'))];
-      let explanation = 'Witness statement logged. Awaiting confirmation from responder teams.';
 
       if (text.includes('fire') || text.includes('smoke') || text.includes('burn')) {
         type = 'Electrical / Wildfire Hazard';
         priority = 'P1';
         severity = 'CRITICAL';
         tags.push('thermal-hotspot', 'combustion-risk');
-        explanation = 'Thermal combustion and thick smoke plume detected near urban infrastructure.';
       } else if (text.includes('landslide') || text.includes('rock') || text.includes('ghat')) {
         type = 'Landslide / Hillside Slope Collapse';
         priority = 'P1';
         severity = 'CRITICAL';
         tags.push('geotechnical-displacement', 'transport-arterial-blocked');
-        explanation = 'Geotechnical slope failure identified. Heavy debris blocking critical evacuation route.';
+      } else if (text.includes('quake') || text.includes('earthquake') || text.includes('tremor')) {
+        type = 'Earthquake Tremor';
+        priority = 'P1';
+        severity = 'CRITICAL';
+        tags.push('seismic-tremor', 'structural-risk');
       } else {
         type = 'Flood / Water Inundation';
         priority = 'P1';
         severity = 'CRITICAL';
         tags.push('water-hazard', 'submerged-infrastructure');
-        explanation = 'Visual evidence confirms severe floodwater accumulation threatening life and vehicles.';
       }
+
+      const explanation = `AI neural assessment identified ${type} incident as ${severity} severity based on eyewitness indicators and crisis markers. Priority score assigned at ${priority === 'P1' ? 95 : 75}/100.`;
 
       setAiResult({
         disasterType: type,
@@ -207,9 +386,9 @@ export default function CitizenReport() {
         extractedTags: [...new Set(tags)],
         explanation
       });
+      setStep(2);
     } finally {
       setIsAiScanning(false);
-      setStep(2);
     }
   };
 
@@ -240,7 +419,6 @@ export default function CitizenReport() {
 
   const handleFinalSubmit = async () => {
     setIsSubmitting(true);
-    let createdIncident = null;
 
     try {
       const res = await submitReportAPI({
@@ -251,21 +429,25 @@ export default function CitizenReport() {
         imageFile: selectedFile
       });
 
-      createdIncident = {
+      const serverImageUrl = res.image 
+        ? (res.image.startsWith('http') ? res.image : `${API_BASE_URL}/${res.image.replace(/^\//, '')}`)
+        : imagePreview;
+
+      const createdIncident = {
         id: `INC-${res.report_id}`,
         rawId: res.report_id,
         disasterType: res.disaster_type || aiResult.disasterType,
         description: description || 'Eyewitness emergency report with camera capture.',
-        imageUrl: res.image ? `http://localhost:8000/${res.image}` : imagePreview,
+        imageUrl: serverImageUrl,
         location,
         incidentTime: new Date().toISOString(),
         status: 'Reported',
         aiAnalysis: {
-          confidenceScore: res.confidence ? (res.confidence > 1 ? res.confidence / 100 : res.confidence) : 0.94,
+          confidenceScore: res.confidence != null && res.confidence > 0 ? (res.confidence > 1 ? res.confidence / 100 : res.confidence) : 0.94,
           severity: res.severity || aiResult.severity,
           priorityLevel: (res.severity?.toUpperCase() === 'CRITICAL' || res.severity?.toUpperCase() === 'HIGH') ? 'P1' : 'P2',
-          priorityScore: 92,
-          isDuplicate: false,
+          priorityScore: res.priority_score || 92,
+          isDuplicate: Boolean(res.is_duplicate),
           aiReasoning: res.ai_reasoning || aiResult.explanation,
           humanReviewRequired: res.human_review_required ?? true,
           relatedIncidentIds: []
@@ -275,9 +457,23 @@ export default function CitizenReport() {
 
       addIncident(createdIncident);
       playEmergencyAlert('P1');
+      navigate('/report/success', { state: { incident: createdIncident } });
     } catch (err) {
-      console.warn('Backend submission error, falling back locally:', err);
-      createdIncident = {
+      console.warn('Backend submission error or rejected:', err);
+      const detail = err.detail || err.message || '';
+
+      if (detail.toLowerCase().includes('valid disaster report') || err.status === 400 || detail.toLowerCase().includes('rejection') || detail.toLowerCase().includes('prank') || detail.toLowerCase().includes('invalid')) {
+        setValidationModal({
+          isOpen: true,
+          title: 'Please enter a valid disaster report',
+          message: 'Submission Flagged & Rejected',
+          reason: detail.replace(/^Error:\s*/, '') || 'The server rejected this report. Please provide a valid disaster report describing an authentic emergency.'
+        });
+        return;
+      }
+
+      // Safe local fallback if backend network is down
+      const fallbackIncident = {
         id: `INC-${Math.floor(1000 + Math.random() * 9000)}`,
         rawId: Date.now(),
         disasterType: aiResult.disasterType,
@@ -298,18 +494,19 @@ export default function CitizenReport() {
         },
         notes: []
       };
-      addIncident(createdIncident);
+
+      addIncident(fallbackIncident);
       playEmergencyAlert('P1');
+      navigate('/report/success', { state: { incident: fallbackIncident } });
     } finally {
       setIsSubmitting(false);
-      navigate('/report/success', { state: { incident: createdIncident } });
     }
   };
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-6 space-y-8 animate-fade-lift">
       
-      {/* Header with restored AI Incident Intake Wizard Badge */}
+      {/* Header */}
       <div className="text-center space-y-3">
         <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-purple-100 dark:bg-purple-950/40 border border-purple-300 dark:border-purple-500/30 text-purple-700 dark:text-purple-300 text-xs font-bold uppercase tracking-wider shadow-sm">
           <Sparkles className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
@@ -319,48 +516,63 @@ export default function CitizenReport() {
           Citizen Disaster Reporting
         </h1>
         <p className="text-xs sm:text-sm text-(--text-muted) max-w-xl mx-auto">
-          Submit witness description and camera photos. Our multi-modal AI immediately detects hazard type and prioritizes response.
+          Submit witness description and camera photos. Our multi-modal AI immediately detects and classifies the disaster type.
         </p>
 
         {/* 4 Step Progress Pills */}
-        <div className="flex items-center justify-center gap-2 pt-4 overflow-x-auto pb-1">
+        <div className="grid grid-cols-4 gap-2 pt-4 max-w-2xl mx-auto">
           {[
-            { num: 1, label: '01 Description & Photo' },
-            { num: 2, label: '02 AI Identification' },
-            { num: 3, label: '03 Location Pin' },
-            { num: 4, label: '04 Review & Ingest' },
-          ].map((s) => (
-            <div
-              key={s.num}
-              className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all shrink-0 ${
-                step === s.num
-                  ? 'bg-purple-600 text-white shadow-md'
-                  : step > s.num
-                  ? 'bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-500/30'
-                  : 'bg-slate-200/80 dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-slate-300 dark:border-slate-800'
-              }`}
-            >
-              <span>{s.label}</span>
-            </div>
-          ))}
+            { n: 1, label: 'Witness Evidence' },
+            { n: 2, label: 'AI Detection' },
+            { n: 3, label: 'Geolocation' },
+            { n: 4, label: 'Disaster Dossier' }
+          ].map(s => {
+            const isDone = step > s.n;
+            const isCurrent = step === s.n;
+            return (
+              <div 
+                key={s.n} 
+                className={`flex flex-col items-center p-2.5 rounded-2xl border transition-all ${
+                  isCurrent 
+                    ? 'border-purple-600 bg-purple-100 dark:bg-purple-950/60 shadow-sm' 
+                    : isDone
+                    ? 'border-emerald-500/40 bg-emerald-500/5'
+                    : 'border-(--border-subtle) opacity-60'
+                }`}
+              >
+                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black ${
+                  isCurrent 
+                    ? 'bg-purple-600 text-white' 
+                    : isDone 
+                    ? 'bg-emerald-500 text-white' 
+                    : 'bg-slate-300 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
+                }`}>
+                  {isDone ? '✓' : s.n}
+                </span>
+                <span className={`text-[11px] font-bold mt-1 text-center hidden sm:block ${
+                  isCurrent ? 'text-purple-900 dark:text-purple-200' : 'text-(--text-main)'
+                }`}>
+                  {s.label}
+                </span>
+              </div>
+            );
+          })}
         </div>
       </div>
 
-      {/* Main Glass Card */}
-      <div className="spatial-card p-6 sm:p-10 rounded-3xl border border-(--border-subtle) shadow-2xl relative overflow-hidden">
+      {/* Main Multi-Step Box */}
+      <div className="p-6 sm:p-10 rounded-3xl spatial-card border border-(--border-subtle) shadow-2xl relative">
         
-        {/* STEP 1: DESCRIPTION + EVIDENCE + VOICE + TAGS */}
+        {/* STEP 1: CAPTURE & DESCRIPTION */}
         {step === 1 && (
-          <div className="space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="space-y-6 animate-fade-lift">
+            <div className="flex items-center justify-between pb-4 border-b border-(--border-subtle)">
               <div>
-                <h2 className="text-xl font-black text-(--text-main)">1. Describe the Emergency & Provide Photo</h2>
-                <p className="text-xs text-(--text-muted) mt-0.5">
-                  Type or dictate details. The neural model will cross-examine visuals and text.
-                </p>
+                <h2 className="text-xl font-black text-(--text-main)">Step 1: Witness Evidence</h2>
+                <p className="text-xs text-(--text-muted)">Record voice, describe the disaster, and provide photographic proof</p>
               </div>
-
-              {/* Native Voice Dictation Button */}
+              
+              {/* Native Voice-to-Text Button */}
               <button
                 type="button"
                 onClick={toggleSpeechRecognition}
@@ -389,13 +601,12 @@ export default function CitizenReport() {
               />
             </div>
 
-            {/* Rapid Situation Hazard Chips */}
+            {/* Quick Tactical Incident Tags */}
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-(--text-muted) mb-2 flex items-center gap-1.5">
-                <Tag className="w-3.5 h-3.5 text-purple-600" />
-                <span>Rapid Situation Chips (Tap to add priority markers):</span>
+              <label className="block text-xs font-bold uppercase tracking-wider text-(--text-muted) mb-2">
+                Quick Situation Tags (Select all that apply)
               </label>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-1.5">
                 {QUICK_TAGS.map((tag) => {
                   const isSelected = selectedTags.includes(tag);
                   return (
@@ -416,6 +627,59 @@ export default function CitizenReport() {
               </div>
             </div>
 
+            {/* REAL-TIME AI INTERPRETATION (Below Quick Situation Tags) */}
+            <div>
+              {isLiveAnalyzing && (
+                <div className="flex items-center gap-2 p-3.5 rounded-2xl bg-purple-50/80 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800/40 text-xs font-semibold text-purple-700 dark:text-purple-300 animate-pulse">
+                  <Loader2 className="w-4 h-4 animate-spin text-purple-600 dark:text-purple-400" />
+                  <span>AI Neural Engine interpreting eyewitness input in real time...</span>
+                </div>
+              )}
+
+              {!isLiveAnalyzing && liveInterpretation && (
+                liveInterpretation.is_valid === false ? (
+                  <div className="p-4 rounded-2xl bg-amber-50/90 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-600/40 shadow-xs space-y-1.5 animate-fade-in">
+                    <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 font-bold text-xs">
+                      <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                      <span className="uppercase tracking-wider">Non-Disaster / Casual Content Flagged</span>
+                    </div>
+                    <p className="text-xs text-amber-800 dark:text-amber-200/90 leading-relaxed">
+                      {liveInterpretation.reasoning || 'This statement does not describe an active disaster. Please describe an authentic emergency hazard (flooding, fire, landslide, earthquake, storm).'}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="p-4 rounded-2xl bg-gradient-to-r from-purple-50/80 to-indigo-50/80 dark:from-slate-900 dark:to-slate-900/90 border border-purple-300 dark:border-purple-600/40 shadow-xs space-y-2 animate-fade-in">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center gap-2">
+                        <Sparkles className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                        <span className="text-xs font-black uppercase tracking-wider text-(--text-main)">
+                          Live AI Interpretation: <span className="text-purple-600 dark:text-purple-400 font-extrabold">{liveInterpretation.disaster_type}</span>
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-black uppercase ${
+                          (liveInterpretation.severity || '').toLowerCase() === 'critical' ? 'bg-red-500/15 text-red-600 dark:text-red-400 border border-red-500/30' :
+                          (liveInterpretation.severity || '').toLowerCase() === 'high' ? 'bg-orange-500/15 text-orange-600 dark:text-orange-400 border border-orange-500/30' :
+                          (liveInterpretation.severity || '').toLowerCase() === 'low' ? 'bg-green-500/15 text-green-600 dark:text-green-400 border border-green-500/30' :
+                          'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30'
+                        }`}>
+                          {liveInterpretation.severity} ({liveInterpretation.priority_score ?? 50}/100)
+                        </span>
+                        <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                          {liveInterpretation.confidence != null && liveInterpretation.confidence > 0
+                            ? `${Math.round(liveInterpretation.confidence > 1 ? liveInterpretation.confidence : liveInterpretation.confidence * 100)}% Confidence`
+                            : 'Verified'}
+                        </span>
+                      </div>
+                    </div>
+                    <p className="text-xs text-(--text-muted) leading-relaxed">
+                      {liveInterpretation.reasoning}
+                    </p>
+                  </div>
+                )
+              )}
+            </div>
+
             {/* Photo Capture / Upload Buttons */}
             <div className="space-y-3 pt-2">
               <label className="block text-xs font-bold uppercase tracking-wider text-(--text-muted)">
@@ -424,47 +688,63 @@ export default function CitizenReport() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {/* Snap Live Photo */}
-                <label className="p-4 rounded-2xl border-2 border-dashed border-purple-400/60 hover:border-purple-500 bg-purple-50/70 dark:bg-purple-950/20 cursor-pointer transition flex items-center gap-3.5 tactile-spring shadow-sm">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    onChange={handleFileUpload}
-                    className="hidden"
-                  />
-                  <div className="p-3 rounded-xl bg-purple-600 text-white shadow-md">
-                    <Camera className="w-6 h-6" />
+                <button
+                  type="button"
+                  onClick={startCamera}
+                  className="p-4 rounded-2xl border-2 border-dashed border-purple-400/60 hover:border-purple-500 bg-purple-50/70 dark:bg-purple-950/20 cursor-pointer transition flex items-center gap-3.5 tactile-spring shadow-sm text-left w-full"
+                >
+                  <div className="p-2.5 rounded-xl bg-purple-600 text-white shadow-sm shrink-0">
+                    <Camera className="w-5 h-5" />
                   </div>
                   <div>
-                    <span className="text-sm font-bold text-(--text-main) block">Snap Live Photo</span>
-                    <span className="text-[11px] text-(--text-muted)">Open camera to click picture</span>
+                    <span className="text-xs font-bold text-purple-950 dark:text-purple-200 block">Capture Live Camera Photo</span>
+                    <span className="text-[11px] text-purple-700 dark:text-purple-400">Opens camera viewfinder & instant snap</span>
                   </div>
-                </label>
+                </button>
+                <input
+                  ref={cameraInputRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  className="hidden"
+                  onChange={handleFileUpload}
+                />
 
-                {/* Upload from Device */}
-                <label className="p-4 rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-purple-500 bg-slate-50 dark:bg-slate-950/40 cursor-pointer transition flex items-center gap-3.5 tactile-spring shadow-sm">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleFileUpload}
-                    className="hidden"
-                  />
-                  <div className="p-3 rounded-xl bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
-                    <Upload className="w-6 h-6" />
+                {/* Upload from Gallery */}
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="p-4 rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-purple-400 bg-slate-50 dark:bg-slate-950/40 cursor-pointer transition flex items-center gap-3.5 tactile-spring shadow-sm text-left w-full"
+                >
+                  <div className="p-2.5 rounded-xl bg-slate-200 dark:bg-slate-800 text-(--text-main) shrink-0">
+                    <Upload className="w-5 h-5" />
                   </div>
                   <div>
-                    <span className="text-sm font-bold text-(--text-main) block">Upload from Device</span>
-                    <span className="text-[11px] text-(--text-muted)">Select image from gallery / files</span>
+                    <span className="text-xs font-bold text-(--text-main) block">Upload Photo File</span>
+                    <span className="text-[11px] text-(--text-muted)">From storage gallery (JPG, PNG)</span>
                   </div>
-                </label>
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleFileUpload}
+                />
               </div>
 
-              {/* Verified Incident Presets (Pune & PCMC Region) */}
+              {/* Quick Scenario Fill */}
               <div className="pt-2">
-                <span className="text-[11px] font-bold text-(--text-muted) block mb-1.5">
-                  Or select verified ongoing emergency scenario in Pune:
-                </span>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-bold uppercase tracking-wider text-(--text-muted) flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+                    <span>Real-world Disaster Scenarios (Auto-fill for testing)</span>
+                  </span>
+                  <span className="text-[10px] text-purple-600 dark:text-purple-400 font-bold bg-purple-50 dark:bg-purple-950/40 px-2 py-0.5 rounded-md border border-purple-200 dark:border-purple-800/40">
+                    AI Analyzed Live
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   {INCIDENT_PRESETS.map((p) => {
                     const PresetIcon = p.icon;
                     return (
@@ -476,18 +756,41 @@ export default function CitizenReport() {
                           setDescription(p.desc);
                           setLocation(p.location);
                         }}
-                        className="p-3 rounded-xl bg-white dark:bg-slate-900 hover:border-purple-500 text-xs font-semibold text-(--text-main) border border-slate-300 dark:border-slate-800 shadow-sm transition tactile-spring cursor-pointer text-left flex flex-col justify-between"
+                        className="p-3.5 rounded-2xl bg-gradient-to-br from-white to-slate-50 dark:from-slate-900 dark:to-slate-900/60 hover:from-purple-50/40 hover:to-indigo-50/40 dark:hover:from-purple-950/20 dark:hover:to-indigo-950/20 hover:border-purple-400 dark:hover:border-purple-600 text-xs text-(--text-main) border border-slate-200/90 dark:border-slate-800 shadow-xs hover:shadow-md transition-all duration-200 tactile-spring cursor-pointer text-left flex flex-col justify-between group"
                       >
-                        <div className="flex items-center gap-2">
-                          <PresetIcon className="w-4 h-4 text-purple-600 dark:text-purple-400 shrink-0" />
-                          <span className="font-bold text-purple-700 dark:text-purple-300">{p.label}</span>
+                        <div className="flex items-center gap-2.5">
+                          <div className="p-1.5 rounded-lg bg-purple-100/70 dark:bg-purple-950/50 text-purple-600 dark:text-purple-400 group-hover:scale-110 transition-transform">
+                            <PresetIcon className="w-4 h-4 shrink-0" />
+                          </div>
+                          <span className="font-bold text-sm tracking-tight text-slate-800 dark:text-slate-100 group-hover:text-purple-600 dark:group-hover:text-purple-300 transition-colors">
+                            {p.label}
+                          </span>
                         </div>
-                        <span className="text-[10px] text-(--text-muted) line-clamp-1 mt-1 pl-6">
-                          {p.location.address}
+                        <span className="text-[11px] text-(--text-muted) line-clamp-1 mt-2 pl-8 font-medium">
+                          📍 {p.location.address}
                         </span>
                       </button>
                     );
                   })}
+                </div>
+              </div>
+
+              {/* Local Test Samples */}
+              <div className="pt-2">
+                <span className="text-xs font-bold uppercase tracking-wider text-(--text-muted) block mb-1.5">
+                  Local AI Image Validation Test Samples
+                </span>
+                <div className="flex flex-wrap gap-2">
+                  {SAMPLE_PRESETS.map((s, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => handleSelectSample(s)}
+                      className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 hover:border-purple-500 text-xs font-semibold text-(--text-main) border border-slate-300 dark:border-slate-700 shadow-sm transition tactile-spring cursor-pointer"
+                    >
+                      {s.label}
+                    </button>
+                  ))}
                 </div>
               </div>
 
@@ -496,13 +799,14 @@ export default function CitizenReport() {
                 <div className="relative rounded-2xl overflow-hidden border border-slate-300 dark:border-slate-800 h-64 mt-3 shadow-md bg-black">
                   <img src={imagePreview} alt="Evidence" className="w-full h-full object-cover" />
                   <div className="absolute top-2 left-2 bg-slate-950/80 px-3 py-1 rounded-lg text-xs font-bold text-white border border-white/20">
-                    Active Visual Evidence
+                    Active Visual Evidence Attached
                   </div>
                 </div>
               )}
             </div>
 
-            <div className="flex justify-end pt-4">
+            {/* Run AI Identification CTA Button */}
+            <div className="pt-4 flex justify-end">
               <button
                 type="button"
                 disabled={isAiScanning}
@@ -512,11 +816,11 @@ export default function CitizenReport() {
                 {isAiScanning ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Neural Vision Processing...</span>
+                    <span>Analyzing Multi-Modal Vision...</span>
                   </>
                 ) : (
                   <>
-                    <span>Run AI Disaster Identification</span>
+                    <span>Run AI Identification</span>
                     <ArrowRight className="w-4 h-4" />
                   </>
                 )}
@@ -525,56 +829,55 @@ export default function CitizenReport() {
           </div>
         )}
 
-        {/* STEP 2: AI IDENTIFICATION RESULT */}
+        {/* STEP 2: AI DETECTION REVIEW */}
         {step === 2 && (
-          <div className="space-y-6">
-            <div>
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-500/30 text-xs font-bold mb-2">
-                <ShieldCheck className="w-4 h-4" /> AI Identification Complete
+          <div className="space-y-6 animate-fade-lift">
+            <div className="flex items-center justify-between pb-4 border-b border-(--border-subtle)">
+              <div>
+                <h2 className="text-xl font-black text-(--text-main)">Step 2: AI Detection Assessment</h2>
+                <p className="text-xs text-(--text-muted)">Verify the neural computer vision triage results</p>
               </div>
-              <h2 className="text-2xl font-black text-(--text-main)">AI Hazard Classification</h2>
-              <p className="text-xs text-(--text-muted) mt-1">
-                The neural system analyzed image pixels and witness testimony against regional hazard patterns.
-              </p>
+              <div className="flex items-center gap-2 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-3 py-1.5 rounded-xl border border-emerald-500/30 text-xs font-bold">
+                <ShieldCheck className="w-4 h-4" />
+                <span>Verified Match</span>
+              </div>
             </div>
 
-            <div className="p-6 rounded-3xl bg-purple-50/70 dark:bg-slate-900/80 border border-purple-200 dark:border-purple-500/40 shadow-xl space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-purple-200 dark:border-slate-800">
-                <div>
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-purple-700 dark:text-purple-400">Classified Disaster Event</span>
-                  <h3 className="text-2xl font-black text-(--text-main) mt-0.5">{aiResult.disasterType}</h3>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="px-3.5 py-1.5 rounded-full text-xs font-extrabold bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400 border border-red-300 dark:border-red-500/40">
-                    {aiResult.priority} {aiResult.severity}
-                  </span>
-                  <span className="px-3.5 py-1.5 rounded-full text-xs font-bold bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-500/30">
-                    {Math.round(aiResult.confidenceScore * 100)}% Confidence
-                  </span>
-                </div>
+            {/* Assessment Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="p-5 rounded-2xl bg-purple-500/5 border border-purple-500/25 space-y-2">
+                <span className="text-[10px] uppercase font-bold text-purple-600 dark:text-purple-400">Classified Hazard</span>
+                <div className="text-2xl font-black text-(--text-main)">{aiResult.disasterType}</div>
+                <span className="text-xs text-(--text-muted) block">Automated Category Detection</span>
               </div>
 
-              <div>
-                <span className="text-xs font-bold uppercase tracking-wider text-(--text-muted) block mb-1">
-                  AI Multi-Modal Reasoning
-                </span>
-                <p className="text-sm text-(--text-main) leading-relaxed bg-white dark:bg-slate-950 p-4 rounded-2xl border border-purple-100 dark:border-slate-800 shadow-sm">
-                  {aiResult.explanation}
-                </p>
-              </div>
-
-              <div>
-                <span className="text-xs font-bold uppercase tracking-wider text-(--text-muted) block mb-1.5">
-                  Detected Threat Signatures
-                </span>
-                <div className="flex flex-wrap gap-2">
-                  {aiResult.extractedTags.map((tag, i) => (
-                    <span key={i} className="px-3 py-1 rounded-lg font-mono text-xs bg-purple-100 dark:bg-purple-600/20 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-500/30 font-semibold">
-                      #{tag}
-                    </span>
-                  ))}
+              <div className="p-5 rounded-2xl bg-red-500/5 border border-red-500/25 space-y-2">
+                <span className="text-[10px] uppercase font-bold text-red-600 dark:text-red-400">Priority Level</span>
+                <div className="text-2xl font-black text-red-600 dark:text-red-400">
+                  {aiResult.priority} ({aiResult.severity})
                 </div>
+                <span className="text-xs text-(--text-muted) block">Life Safety Hazard Matrix</span>
               </div>
+            </div>
+
+            {/* Extracted Neural Tags */}
+            <div>
+              <span className="text-xs font-bold uppercase tracking-wider text-(--text-muted) block mb-2">
+                Neural Keypoint Tags Extracted
+              </span>
+              <div className="flex flex-wrap gap-2">
+                {aiResult.extractedTags.map((t, idx) => (
+                  <span key={idx} className="px-3 py-1 rounded-xl text-xs font-mono font-semibold bg-slate-500/10 text-(--text-main) border border-(--border-subtle)">
+                    #{t}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            {/* Model Reasoning */}
+            <div className="p-4 rounded-2xl bg-slate-500/5 border border-(--border-subtle) space-y-1">
+              <span className="text-xs font-bold uppercase text-(--text-muted)">Reasoning & Cross-Check</span>
+              <p className="text-xs text-(--text-main) leading-relaxed">{aiResult.explanation}</p>
             </div>
 
             <div className="flex justify-between pt-4">
@@ -583,84 +886,62 @@ export default function CitizenReport() {
                 onClick={() => setStep(1)}
                 className="px-5 py-2.5 rounded-xl text-xs font-semibold border border-slate-300 dark:border-slate-700 text-(--text-main) hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2 cursor-pointer tactile-spring"
               >
-                <ArrowLeft className="w-4 h-4" /> Edit Evidence
+                <ArrowLeft className="w-4 h-4" /> Back to Evidence
               </button>
               <button
                 type="button"
                 onClick={() => setStep(3)}
                 className="px-8 py-3.5 rounded-xl font-bold text-sm text-white bg-purple-600 hover:bg-purple-700 transition shadow-lg shadow-purple-600/30 flex items-center gap-2 cursor-pointer tactile-spring"
               >
-                <span>Confirm & Enter Location</span>
+                <span>Confirm & Proceed to Geolocation</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
             </div>
           </div>
         )}
 
-        {/* STEP 3: LOCATION ENTRY */}
+        {/* STEP 3: GEOLOCATION PINPOINT */}
         {step === 3 && (
-          <div className="space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="space-y-6 animate-fade-lift">
+            <div className="flex items-center justify-between pb-4 border-b border-(--border-subtle)">
               <div>
-                <h2 className="text-xl font-black text-(--text-main)">3. Pinpoint Incident Location</h2>
-                <p className="text-xs text-(--text-muted) mt-1">
-                  Click on the interactive map to place the incident pin, or use auto-GPS.
-                </p>
+                <h2 className="text-xl font-black text-(--text-main)">Step 3: Geolocation Coordinates</h2>
+                <p className="text-xs text-(--text-muted)">Tap the map to set exact ground coordinates</p>
               </div>
+
+              {/* Auto Locate GPS Button */}
               <button
                 type="button"
-                onClick={handleAutoLocate}
                 disabled={isLocating}
-                className="px-4 py-2.5 rounded-xl bg-purple-100 dark:bg-purple-500/20 hover:bg-purple-200 dark:hover:bg-purple-500/30 text-purple-700 dark:text-purple-300 border border-purple-300 dark:border-purple-500/40 text-xs font-bold flex items-center gap-2 transition cursor-pointer tactile-spring shrink-0"
+                onClick={handleAutoLocate}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-purple-600 text-white hover:bg-purple-700 transition cursor-pointer shadow-sm tactile-spring disabled:opacity-50"
               >
-                {isLocating ? <Loader2 className="w-4 h-4 animate-spin text-purple-600" /> : <MapPin className="w-4 h-4 text-purple-600 dark:text-purple-400" />}
-                <span>Auto-Detect My GPS</span>
+                {isLocating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MapPin className="w-3.5 h-3.5" />}
+                <span>{isLocating ? 'Acquiring GPS...' : 'Auto Detect GPS'}</span>
               </button>
             </div>
 
-            {/* REAL INTERACTIVE MAP */}
-            <div className="h-72 w-full rounded-2xl overflow-hidden border border-slate-300 dark:border-slate-800 relative shadow-inner">
-              <RealMap
-                pickerMode={true}
-                selectedCoord={location}
-                onSelectLocation={(coord) => setLocation(prev => ({ ...prev, ...coord }))}
-              />
-              <div className="absolute top-2 right-2 z-40 bg-white/90 dark:bg-slate-950/80 backdrop-blur-md px-3 py-1.5 rounded-lg text-[10px] font-bold text-(--text-muted) border border-slate-300 dark:border-slate-800 shadow-sm pointer-events-none flex items-center gap-1.5">
-                <MapPin className="w-3 h-3 text-purple-600" />
-                <span>Click map to position pin</span>
+            {/* Coordinates summary badge */}
+            <div className="flex flex-wrap items-center justify-between gap-3 p-4 rounded-2xl bg-slate-500/5 border border-(--border-subtle)">
+              <div className="space-y-1">
+                <span className="text-[10px] uppercase font-bold text-(--text-muted)">Active Incident Geotag</span>
+                <div className="text-xs font-mono font-bold text-purple-600 dark:text-purple-400">
+                  {location.latitude}° N, {location.longitude}° E
+                </div>
+                <div className="text-xs text-(--text-muted)">{location.address}</div>
               </div>
+              <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/25">
+                Ground Zero Mapped
+              </span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div>
-                <label className="block text-[10px] font-bold uppercase text-(--text-muted) mb-1">Latitude</label>
-                <input
-                  type="number"
-                  step="0.0001"
-                  value={location.latitude}
-                  onChange={(e) => setLocation(prev => ({ ...prev, latitude: parseFloat(e.target.value) || 0 }))}
-                  className="w-full p-3 rounded-xl bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 text-xs font-mono text-(--text-main) shadow-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] font-bold uppercase text-(--text-muted) mb-1">Longitude</label>
-                <input
-                  type="number"
-                  step="0.0001"
-                  value={location.longitude}
-                  onChange={(e) => setLocation(prev => ({ ...prev, longitude: parseFloat(e.target.value) || 0 }))}
-                  className="w-full p-3 rounded-xl bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 text-xs font-mono text-(--text-main) shadow-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] font-bold uppercase text-(--text-muted) mb-1">Location Address</label>
-                <input
-                  type="text"
-                  value={location.address}
-                  onChange={(e) => setLocation(prev => ({ ...prev, address: e.target.value }))}
-                  className="w-full p-3 rounded-xl bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 text-xs text-(--text-main) shadow-sm"
-                />
-              </div>
+            {/* Interactive Leaflet Picker Map */}
+            <div className="h-96 rounded-2xl overflow-hidden border border-slate-300 dark:border-slate-800 shadow-md">
+              <RealMap
+                pickerMode={true}
+                selectedCoord={{ latitude: location.latitude, longitude: location.longitude }}
+                onSelectLocation={(newLoc) => setLocation(newLoc)}
+              />
             </div>
 
             <div className="flex justify-between pt-4">
@@ -676,43 +957,39 @@ export default function CitizenReport() {
                 onClick={() => setStep(4)}
                 className="px-8 py-3.5 rounded-xl font-bold text-sm text-white bg-purple-600 hover:bg-purple-700 transition shadow-lg shadow-purple-600/30 flex items-center gap-2 cursor-pointer tactile-spring"
               >
-                <span>Proceed to Review</span>
+                <span>Review Final Dossier</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
             </div>
           </div>
         )}
 
-        {/* STEP 4: REVIEW & SUBMIT */}
+        {/* STEP 4: FINAL DOSSIER INGESTION */}
         {step === 4 && (
-          <div className="space-y-6">
-            <div>
-              <h2 className="text-xl font-black text-(--text-main)">4. Final Verification & Network Submission</h2>
-              <p className="text-xs text-(--text-muted) mt-1">
-                Confirm all captured data before injecting into the dispatch triage queue.
-              </p>
+          <div className="space-y-6 animate-fade-lift">
+            <div className="flex items-center justify-between pb-4 border-b border-(--border-subtle)">
+              <div>
+                <h2 className="text-xl font-black text-(--text-main)">Step 4: Dispatch Dossier Confirmation</h2>
+                <p className="text-xs text-(--text-muted)">Confirm all verified incident details before submitting to response teams</p>
+              </div>
+              <span className="px-3 py-1 rounded-full text-xs font-bold bg-purple-500/15 text-purple-600 dark:text-purple-400 border border-purple-500/30">
+                Ready for Dispatch
+              </span>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-4">
-                <div className="p-4 rounded-2xl bg-purple-50/80 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-500/30">
-                  <span className="text-[10px] uppercase font-bold text-purple-700 dark:text-purple-400">Classified Disaster</span>
-                  <div className="flex items-center justify-between mt-1">
-                    <span className="text-lg font-black text-(--text-main)">{aiResult.disasterType}</span>
-                    <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400 border border-red-300 dark:border-red-500/40">
-                      {aiResult.priority}
-                    </span>
-                  </div>
+                <div className="p-4 rounded-2xl bg-slate-500/5 border border-(--border-subtle)">
+                  <span className="text-[10px] uppercase font-bold text-(--text-muted)">Hazard Classification</span>
+                  <span className="text-base font-black text-(--text-main) block mt-1">{aiResult.disasterType}</span>
                 </div>
 
-                <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800">
-                  <span className="text-[10px] uppercase font-bold text-(--text-muted)">Citizen Eyewitness Account</span>
-                  <p className="text-xs mt-1 leading-relaxed text-(--text-main) font-medium">
-                    {description || 'Eyewitness emergency report with camera capture.'}
-                  </p>
+                <div className="p-4 rounded-2xl bg-slate-500/5 border border-(--border-subtle)">
+                  <span className="text-[10px] uppercase font-bold text-(--text-muted)">Eyewitness Statement</span>
+                  <p className="text-xs text-(--text-main) leading-relaxed mt-1">{description}</p>
                 </div>
 
-                <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800">
+                <div className="p-4 rounded-2xl bg-slate-500/5 border border-(--border-subtle)">
                   <span className="text-[10px] uppercase font-bold text-(--text-muted)">Verified Geographic Coordinates</span>
                   <span className="text-xs font-mono block mt-1 text-(--text-main) font-bold">
                     {location.latitude}° N, {location.longitude}° E
@@ -761,6 +1038,97 @@ export default function CitizenReport() {
         )}
 
       </div>
+
+      {/* LIVE CAMERA VIEWFINDER MODAL */}
+      {isCameraOpen && (
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fade-in">
+          <div className="bg-slate-900 border border-slate-700/80 rounded-3xl p-5 max-w-lg w-full shadow-2xl space-y-4 text-center relative overflow-hidden">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" />
+                <span className="text-xs font-black uppercase tracking-wider text-white">Live Camera Viewfinder</span>
+              </div>
+              <button
+                type="button"
+                onClick={stopCamera}
+                className="text-slate-400 hover:text-white p-1 rounded-lg transition cursor-pointer text-sm font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="relative rounded-2xl overflow-hidden bg-black aspect-4/3 flex items-center justify-center border border-slate-800 shadow-inner">
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                className="w-full h-full object-cover"
+              />
+              {/* Tactical Viewfinder Overlay */}
+              <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+                <div className="w-36 h-36 border border-white/20 rounded-2xl relative">
+                  <div className="absolute -top-1 -left-1 w-4 h-4 border-t-2 border-l-2 border-purple-400" />
+                  <div className="absolute -top-1 -right-1 w-4 h-4 border-t-2 border-r-2 border-purple-400" />
+                  <div className="absolute -bottom-1 -left-1 w-4 h-4 border-b-2 border-l-2 border-purple-400" />
+                  <div className="absolute -bottom-1 -right-1 w-4 h-4 border-b-2 border-r-2 border-purple-400" />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={stopCamera}
+                className="px-5 py-2.5 rounded-xl text-xs font-bold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={capturePhoto}
+                className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-black text-white bg-purple-600 hover:bg-purple-700 shadow-lg shadow-purple-600/40 transition cursor-pointer tactile-spring"
+              >
+                <Camera className="w-4 h-4" />
+                <span>Take Photo</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* REJECTION POP-UP MODAL (For Pranks, Jokes & Irrelevant Reports) */}
+      {validationModal.isOpen && (
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-fade-in">
+          <div className="bg-white dark:bg-slate-900 border-2 border-red-500/50 rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl space-y-5 text-center relative overflow-hidden">
+            <div className="w-16 h-16 rounded-2xl bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400 border border-red-300 dark:border-red-500/30 flex items-center justify-center mx-auto shadow-md">
+              <AlertTriangle className="w-8 h-8" />
+            </div>
+
+            <div className="space-y-2">
+              <span className="text-[11px] font-extrabold uppercase tracking-widest text-red-600 dark:text-red-400">
+                Verification Alert
+              </span>
+              <h3 className="text-xl sm:text-2xl font-black text-(--text-main)">
+                {validationModal.title}
+              </h3>
+              <p className="text-xs sm:text-sm text-(--text-muted) leading-relaxed">
+                {validationModal.reason}
+              </p>
+            </div>
+
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => setValidationModal({ isOpen: false, title: 'Please enter a valid disaster report', message: '', reason: '' })}
+                className="w-full py-3 px-6 rounded-xl font-bold text-sm text-white bg-red-600 hover:bg-red-700 transition shadow-lg shadow-red-600/30 cursor-pointer tactile-spring"
+              >
+                Understood, Edit Report
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

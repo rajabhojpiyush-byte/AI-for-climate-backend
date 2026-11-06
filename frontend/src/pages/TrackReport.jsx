@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Search, CheckCircle2, AlertTriangle, MapPin } from 'lucide-react';
 import { useIncidents } from '../context/IncidentContext';
@@ -7,22 +7,17 @@ export default function TrackReport() {
   const [searchParams] = useSearchParams();
   const { incidents } = useIncidents();
   const [queryId, setQueryId] = useState(searchParams.get('id') || '');
-  const [activeReport, setActiveReport] = useState(null);
-
-  useEffect(() => {
-    const idFromUrl = searchParams.get('id');
-    if (idFromUrl) {
-      setQueryId(idFromUrl);
-      const found = incidents.find(i => i.id.toLowerCase() === idFromUrl.toLowerCase());
-      if (found) setActiveReport(found);
-    }
-  }, [searchParams, incidents]);
+  const [selectedReport, setSelectedReport] = useState(null);
+  const idFromUrl = searchParams.get('id');
+  const activeReport = selectedReport ?? (idFromUrl
+    ? incidents.find(i => i.id.toLowerCase() === idFromUrl.toLowerCase())
+    : null);
 
   const handleSearch = (e) => {
     e.preventDefault();
     if (!queryId.trim()) return;
     const found = incidents.find(i => i.id.toLowerCase() === queryId.trim().toLowerCase());
-    setActiveReport(found || 'NOT_FOUND');
+    setSelectedReport(found || 'NOT_FOUND');
   };
 
   const steps = [
@@ -87,7 +82,7 @@ export default function TrackReport() {
                 type="button"
                 onClick={() => {
                   setQueryId(inc.id);
-                  setActiveReport(inc);
+                  setSelectedReport(inc);
                 }}
                 className="px-2 py-0.5 rounded-lg bg-slate-500/10 hover:bg-purple-500/20 text-purple-600 dark:text-purple-300 font-mono font-bold cursor-pointer transition"
               >

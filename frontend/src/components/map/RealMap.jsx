@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+﻿import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -150,7 +150,7 @@ export default function RealMap({
             onSelectLocation({
               latitude: lat,
               longitude: lng,
-              address: `GPS Pin: ${lat}° N, ${lng}° E`
+              address: `GPS Pin: ${lat}┬░ N, ${lng}┬░ E`
             });
           }
         });
@@ -177,7 +177,7 @@ export default function RealMap({
         draggable: true
       }).addTo(group);
 
-      marker.bindPopup(`<b style="color:#0f172a">Incident Geotag</b><br/>${selectedCoord.latitude}° N, ${selectedCoord.longitude}° E`).openPopup();
+      marker.bindPopup(`<b style="color:#0f172a">Incident Geotag</b><br/>${selectedCoord.latitude}┬░ N, ${selectedCoord.longitude}┬░ E`).openPopup();
 
       marker.on('dragend', (e) => {
         const pos = e.target.getLatLng();
@@ -185,7 +185,7 @@ export default function RealMap({
           onSelectLocation({
             latitude: parseFloat(pos.lat.toFixed(4)),
             longitude: parseFloat(pos.lng.toFixed(4)),
-            address: `Adjusted Pin: ${pos.lat.toFixed(4)}° N, ${pos.lng.toFixed(4)}° E`
+            address: `Adjusted Pin: ${pos.lat.toFixed(4)}┬░ N, ${pos.lng.toFixed(4)}┬░ E`
           });
         }
       });

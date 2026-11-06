@@ -23,10 +23,10 @@
   --pastel-emerald: #ECFDF5;
   --pastel-rose: #FFF1F2;
 
-  /* Crisp Elevation & Glass Shadow System */
-  --shadow-neo-flat: 0 4px 20px -2px rgba(15, 23, 42, 0.08), 0 2px 6px -1px rgba(15, 23, 42, 0.04);
-  --shadow-neo-pressed: inset 0 2px 4px rgba(15, 23, 42, 0.05);
-  --shadow-neo-elevated: 0 12px 32px -4px rgba(15, 23, 42, 0.12), 0 4px 12px -2px rgba(15, 23, 42, 0.06);
+  /* Pure Neomorphic Dual-Shadow System */
+  --shadow-neo-flat: 7px 7px 16px #d5dbe7, -7px -7px 16px #ffffff;
+  --shadow-neo-pressed: inset 3px 3px 6px #d1d7e3, inset -3px -3px 6px #ffffff;
+  --shadow-neo-elevated: 10px 10px 24px #d0d6e3, -10px -10px 24px #ffffff;
   --shadow-glass: 0 16px 35px -8px rgba(100, 116, 139, 0.12), 0 0 0 1px rgba(255, 255, 255, 0.9) inset;
 
   /* Glow Halos */
@@ -55,9 +55,9 @@ html.dark, body.dark {
   --pastel-emerald: rgba(16, 185, 129, 0.12);
   --pastel-rose: rgba(239, 68, 68, 0.12);
 
-  --shadow-neo-flat: 0 4px 20px -2px rgba(0, 0, 0, 0.45);
-  --shadow-neo-pressed: inset 0 2px 4px rgba(0, 0, 0, 0.5);
-  --shadow-neo-elevated: 0 12px 32px -4px rgba(0, 0, 0, 0.65);
+  --shadow-neo-flat: 6px 6px 14px #06090e, -6px -6px 14px #111726;
+  --shadow-neo-pressed: inset 3px 3px 8px #05070c, inset -3px -3px 8px #141c2e;
+  --shadow-neo-elevated: 12px 12px 28px #05070c, -12px -12px 28px #131a2c;
   --shadow-glass: 0 20px 40px -10px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.08) inset;
 
   --glow-p1: 0 0 25px rgba(239, 68, 68, 0.45);
@@ -166,31 +166,18 @@ html, body {
   animation: p1Pulse 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
-/* Success Tick Animation Keyframes */
-@keyframes strokeCircle {
-  0% { stroke-dashoffset: 150; }
-  100% { stroke-dashoffset: 0; }
-}
-
-@keyframes strokeCheck {
-  0% { stroke-dashoffset: 50; transform: scale(0.8); }
-  60% { transform: scale(1.15); }
-  100% { stroke-dashoffset: 0; transform: scale(1); }
-}
-
 /* Form inputs */
 input, textarea, select {
   background-color: var(--input-bg) !important;
   color: var(--text-main) !important;
-  border: 1px solid var(--border-subtle) !important;
-  border-radius: 0.875rem;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  border-color: var(--border-subtle) !important;
+  box-shadow: var(--shadow-neo-pressed) !important;
 }
 
 input:focus, textarea:focus, select:focus {
-  border-color: #9333EA !important;
+  border-color: var(--border-focus) !important;
   outline: none !important;
-  box-shadow: 0 0 0 3px rgba(147, 51, 234, 0.25) !important;
+  box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.2) !important;
 }
 
 /* Leaflet Tile Styling for Light & Dark */
@@ -295,4 +282,27 @@ html.dark .leaflet-tile {
 
 .cssbuttons-io-button:active {
   transform: scale(0.96);
+}
+
+
+/* Custom sleek tactical scrollbars */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.35);
+  border-radius: 9999px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.6);
+}
+.dark .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+}
+.dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.35);
 }
