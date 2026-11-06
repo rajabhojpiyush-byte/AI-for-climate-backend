@@ -8,6 +8,8 @@ ENV/
 
 # Database & Uploads
 disaster.db
+# Database & Uploads
+disaster.db
 disaster.db*
 *.db
 *.db-shm

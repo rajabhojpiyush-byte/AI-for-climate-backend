@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { IncidentProvider, useIncidents } from './context/IncidentContext';
 import Navbar from './components/Navbar';
@@ -9,6 +9,24 @@ import ReportSuccess from './pages/ReportSuccess';
 import TrackReport from './pages/TrackReport';
 import AuthorityLogin from './pages/AuthorityLogin';
 import Dashboard from './pages/Dashboard';
+
+// Force scroll restoration to manual so page reloads always reset to top
+if (typeof window !== 'undefined' && 'scrollRestoration' in window.history) {
+  window.history.scrollRestoration = 'manual';
+}
+
+// ScrollToTop component ensuring every navigation and redirect starts at top of screen
+function ScrollToTop() {
+  const { pathname, search } = useLocation();
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  }, [pathname, search]);
+
+  return null;
+}
 
 // Route Guard: Ensures only authenticated / registered officers access the command dashboard
 function ProtectedDashboard() {
@@ -47,6 +65,7 @@ export default function App() {
   return (
     <IncidentProvider>
       <Router>
+        <ScrollToTop />
         <div className="min-h-screen flex flex-col font-sans transition-colors duration-300 bg-(--bg-main) text-(--text-main) relative selection:bg-purple-200 selection:text-purple-900">
           <Navbar theme={theme} toggleTheme={toggleTheme} />
           <main className="flex-1 pt-24 sm:pt-28 pb-12 px-3 sm:px-6">

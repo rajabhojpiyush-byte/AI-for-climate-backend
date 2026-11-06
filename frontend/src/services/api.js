@@ -88,7 +88,10 @@ export async function analyzePreviewAPI(description, imageFile = null) {
   if (!response.ok) {
     const errorData = await response.json().catch(() => null);
     const msg = errorData?.detail || response.statusText;
-    throw new Error(`Preview analysis failed: ${msg}`);
+    const err = new Error(msg);
+    err.status = response.status;
+    err.detail = msg;
+    throw err;
   }
 
   return await response.json();

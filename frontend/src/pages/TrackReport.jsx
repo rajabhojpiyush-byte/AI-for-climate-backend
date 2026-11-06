@@ -1,52 +1,23 @@
-import React, { useState, useEffect } from 'react';
+﻿import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Search, CheckCircle2, AlertTriangle, MapPin, Loader2 } from 'lucide-react';
+import { Search, CheckCircle2, AlertTriangle, MapPin } from 'lucide-react';
 import { useIncidents } from '../context/IncidentContext';
-import { fetchReportByIdAPI } from '../services/api';
 
 export default function TrackReport() {
   const [searchParams] = useSearchParams();
   const { incidents } = useIncidents();
   const [queryId, setQueryId] = useState(searchParams.get('id') || '');
-  const [activeReport, setActiveReport] = useState(null);
+  const [selectedReport, setSelectedReport] = useState(null);
+  const idFromUrl = searchParams.get('id');
+  const activeReport = selectedReport ?? (idFromUrl
+    ? incidents.find(i => i.id.toLowerCase() === idFromUrl.toLowerCase())
+    : null);
 
-  const [isSearching, setIsSearching] = useState(false);
-
-  useEffect(() => {
-    const idFromUrl = searchParams.get('id');
-    if (idFromUrl) {
-      setQueryId(idFromUrl);
-      const found = incidents.find(i => i.id.toLowerCase() === idFromUrl.toLowerCase());
-      if (found) {
-        setActiveReport(found);
-      } else {
-        fetchReportByIdAPI(idFromUrl).then(rep => {
-          if (rep) setActiveReport(rep);
-        }).catch(() => {});
-      }
-    }
-  }, [searchParams, incidents]);
-
-  const handleSearch = async (e) => {
+  const handleSearch = (e) => {
     e.preventDefault();
-    const cleanId = queryId.trim();
-    if (!cleanId) return;
-
-    const found = incidents.find(i => i.id.toLowerCase() === cleanId.toLowerCase());
-    if (found) {
-      setActiveReport(found);
-      return;
-    }
-
-    setIsSearching(true);
-    try {
-      const rep = await fetchReportByIdAPI(cleanId);
-      setActiveReport(rep || 'NOT_FOUND');
-    } catch {
-      setActiveReport('NOT_FOUND');
-    } finally {
-      setIsSearching(false);
-    }
+    if (!queryId.trim()) return;
+    const found = incidents.find(i => i.id.toLowerCase() === queryId.trim().toLowerCase());
+    setSelectedReport(found || 'NOT_FOUND');
   };
 
   const steps = [
@@ -69,7 +40,7 @@ export default function TrackReport() {
   ];
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-8 space-y-8">
+    <div className="max-w-3xl mx-auto px-4 py-8 space-y-8 animate-fade-lift">
       
       {/* Header with High-Contrast Text */}
       <div className="text-center space-y-2">
@@ -82,28 +53,50 @@ export default function TrackReport() {
       </div>
 
       {/* Search Input Bar */}
-      <form onSubmit={handleSearch} className="flex gap-2 max-w-md mx-auto">
-        <div className="relative flex-1">
-          <input
-            type="text"
-            value={queryId}
-            onChange={(e) => setQueryId(e.target.value)}
-            placeholder="Enter Report ID (e.g. INC-8492)"
-            className="w-full px-4 py-3 rounded-2xl bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 text-sm text-(--text-main) focus:outline-none focus:border-purple-500 font-mono shadow-sm"
-          />
-        </div>
-        <button
-          type="submit"
-          className="px-5 py-3 rounded-2xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-md shadow-purple-600/25 transition tactile-spring cursor-pointer flex items-center justify-center shrink-0"
-        >
-          <Search className="w-4 h-4" />
-        </button>
-      </form>
+      <div className="space-y-3 max-w-md mx-auto">
+        <form onSubmit={handleSearch} className="flex gap-2">
+          <div className="relative flex-1">
+            <input
+              type="text"
+              value={queryId}
+              onChange={(e) => setQueryId(e.target.value)}
+              placeholder="Enter Report ID (e.g. INC-8492)"
+              className="w-full px-4 py-3 rounded-2xl bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 text-sm text-(--text-main) focus:outline-none focus:border-purple-500 font-mono shadow-sm"
+            />
+          </div>
+          <button
+            type="submit"
+            className="px-5 py-3 rounded-2xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-md shadow-purple-600/25 transition tactile-spring cursor-pointer flex items-center justify-center shrink-0"
+          >
+            <Search className="w-4 h-4" />
+          </button>
+        </form>
+
+        {/* Quick Report Selectors */}
+        {incidents.length > 0 && (
+          <div className="flex items-center gap-1.5 flex-wrap justify-center text-[11px] text-(--text-muted)">
+            <span>Recent in Grid:</span>
+            {incidents.slice(0, 3).map(inc => (
+              <button
+                key={inc.id}
+                type="button"
+                onClick={() => {
+                  setQueryId(inc.id);
+                  setSelectedReport(inc);
+                }}
+                className="px-2 py-0.5 rounded-lg bg-slate-500/10 hover:bg-purple-500/20 text-purple-600 dark:text-purple-300 font-mono font-bold cursor-pointer transition"
+              >
+                {inc.id}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Active Report Found (Adaptive Light/Dark Card) */}
       {activeReport && activeReport !== 'NOT_FOUND' && (
-        <div className="p-6 sm:p-8 rounded-3xl spatial-card border border-(--border-subtle)] shadow-2xl space-y-6">
-          <div className="flex flex-wrap items-center justify-between gap-4 pb-6 border-b border-(--border-subtle)]">
+        <div className="p-6 sm:p-8 rounded-3xl spatial-card border border-(--border-subtle) shadow-2xl space-y-6">
+          <div className="flex flex-wrap items-center justify-between gap-4 pb-6 border-b border-(--border-subtle)">
             <div>
               <span className="font-mono text-xs font-bold text-purple-600 dark:text-purple-400">{activeReport.id}</span>
               <h2 className="text-2xl font-black text-(--text-main) mt-0.5">{activeReport.disasterType}</h2>
@@ -113,17 +106,11 @@ export default function TrackReport() {
               </div>
             </div>
             <div className="text-right">
-              <span className={`px-3 py-1 rounded-full text-xs font-bold border ${
-                (activeReport.aiAnalysis?.severity || '').toUpperCase().includes('CRIT')
-                  ? 'bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/30'
-                  : (activeReport.aiAnalysis?.severity || '').toUpperCase().includes('HIGH')
-                  ? 'bg-orange-500/15 text-orange-600 dark:text-orange-400 border-orange-500/30'
-                  : 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30'
-              }`}>
-                {activeReport.aiAnalysis?.priorityLevel} {activeReport.aiAnalysis?.severity || 'MODERATE'}
+              <span className="px-3 py-1 rounded-full text-xs font-bold bg-red-500/15 text-red-600 dark:text-red-400 border border-red-500/30">
+                {activeReport.aiAnalysis?.priorityLevel || 'P1'} CRITICAL
               </span>
               <span className="block text-xs font-semibold text-(--text-muted) mt-2">
-                Status: <strong className="text-(--text-main)]">{activeReport.status}</strong>
+                Status: <strong className="text-(--text-main)">{activeReport.status}</strong>
               </span>
             </div>
           </div>
@@ -147,12 +134,32 @@ export default function TrackReport() {
                     {st.status === 'completed' && <CheckCircle2 className="w-3 h-3" />}
                   </div>
                   <div>
-                    <h4 className="text-sm font-bold text-(--text-main)]">{st.title}</h4>
+                    <h4 className="text-sm font-bold text-(--text-main)">{st.title}</h4>
                     <p className="text-xs text-(--text-muted) mt-0.5">{st.desc}</p>
                   </div>
                 </div>
               ))}
             </div>
+
+            {/* Responder Field Notes if any exist */}
+            {activeReport.notes && activeReport.notes.length > 0 && (
+              <div className="pt-4 border-t border-(--border-subtle) space-y-2">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400">
+                  Command Dispatch Operational Logs
+                </h4>
+                <div className="space-y-2">
+                  {activeReport.notes.map((n, i) => (
+                    <div key={i} className="p-3 rounded-xl bg-slate-500/5 border border-(--border-subtle) text-xs space-y-1">
+                      <div className="flex items-center justify-between font-bold text-(--text-main)">
+                        <span>{n.author}</span>
+                        <span className="text-[10px] text-(--text-muted)">{new Date(n.timestamp).toLocaleTimeString()}</span>
+                      </div>
+                      <p className="text-(--text-muted)">{n.text}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

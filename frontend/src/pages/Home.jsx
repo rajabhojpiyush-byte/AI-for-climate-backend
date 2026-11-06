@@ -1,19 +1,61 @@
-import React from 'react';
+
 import { Link } from 'react-router-dom';
 import { 
-  FilePlus, Search, Layers, Cpu, Filter, Zap, 
-  CheckCircle2, Radio, Activity, Sparkles, ShieldAlert, ArrowRight, Eye 
+  Search, Layers, Cpu, Filter, Zap, 
+  CheckCircle2, PhoneCall, Flame, HeartPulse, Shield, LifeBuoy
 } from 'lucide-react';
-import { useIncidents } from '../context/IncidentContext';
+import { } from '../context/IncidentContext';
+
+// Verified National Emergency Hotlines
+const CRISIS_HOTLINES = [
+  {
+    number: '112',
+    title: 'National Emergency',
+    subtitle: 'Universal All-Service Dispatch',
+    category: 'Universal',
+    icon: PhoneCall,
+    badgeColor: 'bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/30',
+    hoverBorder: 'hover:border-red-500/50'
+  },
+  {
+    number: '108',
+    title: 'Disaster & Medical',
+    subtitle: 'Emergency Ambulance & Trauma',
+    category: 'Medical',
+    icon: HeartPulse,
+    badgeColor: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30',
+    hoverBorder: 'hover:border-emerald-500/50'
+  },
+  {
+    number: '101',
+    title: 'Fire & Rescue',
+    subtitle: 'Rapid Hazard Extrication',
+    category: 'Fire Service',
+    icon: Flame,
+    badgeColor: 'bg-orange-500/15 text-orange-600 dark:text-orange-400 border-orange-500/30',
+    hoverBorder: 'hover:border-orange-500/50'
+  },
+  {
+    number: '100',
+    title: 'Police Control',
+    subtitle: 'Law Enforcement & Security',
+    category: 'Police',
+    icon: Shield,
+    badgeColor: 'bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/30',
+    hoverBorder: 'hover:border-blue-500/50'
+  },
+  {
+    number: '181',
+    title: 'Women Helpline',
+    subtitle: 'Crisis Response & Support Cell',
+    category: 'Safety',
+    icon: LifeBuoy,
+    badgeColor: 'bg-purple-500/15 text-purple-600 dark:text-purple-400 border-purple-500/30',
+    hoverBorder: 'hover:border-purple-500/50'
+  }
+];
 
 export default function Home() {
-  const { incidents } = useIncidents();
-  
-  // Dynamic Real Metrics
-  const totalCount = incidents.length;
-  const p1Count = incidents.filter(i => i.aiAnalysis?.priorityLevel === 'P1' && i.status !== 'Resolved').length;
-  const verifiedCount = incidents.filter(i => i.status === 'Verified' || i.status === 'In Progress').length;
-
   return (
     <div className="space-y-16 sm:space-y-24 pb-16">
       
@@ -24,12 +66,30 @@ export default function Home() {
         <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-125 h-87.5 bg-purple-500/10 rounded-full blur-[120px] pointer-events-none -z-10" />
         <div className="absolute top-0 right-10 w-75 h-75 bg-sky-500/10 rounded-full blur-[100px] pointer-events-none -z-10" />
 
-        <div className="text-center space-y-4 max-w-4xl mx-auto">
+        <div className="text-center space-y-5 max-w-4xl mx-auto">
           
-          {/* Badge */}
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-purple-100 dark:bg-purple-950/40 border border-purple-300 dark:border-purple-500/30 text-purple-900 dark:text-purple-300 text-xs font-bold uppercase tracking-wider shadow-sm">
-            <Radio className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400 animate-pulse" />
-            <span>AI Disaster Intelligence & Emergency Response Network</span>
+          {/* Top Live Ticker (Img 2: placed at the top) */}
+          <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3 text-xs text-(--text-muted) font-semibold">
+            <span className="flex items-center gap-1.5 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-slate-200 dark:border-slate-800 shadow-xs">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
+              <span className="text-(--text-main) font-medium">Live Intake Active</span>
+            </span>
+            <span className="flex items-center gap-1.5 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-slate-200 dark:border-slate-800 shadow-xs">
+              <span className="w-2 h-2 rounded-full bg-purple-500"></span>
+              <span className="text-(--text-main) font-medium">Pune & PCMC Grid</span>
+            </span>
+            <span className="flex items-center gap-1.5 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-slate-200 dark:border-slate-800 shadow-xs">
+              <span className="w-2 h-2 rounded-full bg-sky-500"></span>
+              <span className="text-(--text-main) font-medium">Multi-Modal Vision Active</span>
+            </span>
+          </div>
+
+          {/* Modern Minimalist Glass Badge (Img 1: Replacing old pill structure) */}
+          <div className="inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full bg-linear-to-r from-purple-500/10 via-indigo-500/10 to-pink-500/10 border border-purple-500/20 backdrop-blur-md shadow-xs">
+            <div className="w-2 h-2 rounded-full bg-purple-600 animate-pulse" />
+            <span className="text-xs font-bold tracking-wider uppercase text-purple-700 dark:text-purple-300">
+              Autonomous Disaster Intelligence & Incident Response Network
+            </span>
           </div>
 
           {/* Headline */}
@@ -44,48 +104,32 @@ export default function Home() {
           <p className="text-(--text-muted) text-sm sm:text-base max-w-2xl mx-auto leading-relaxed">
             Report ongoing emergency incidents with photo evidence or track active response operations. Our multi-modal AI models classify hazards and rank rescue priority in real time.
           </p>
-
-          {/* Live System Operational Ticker Bar */}
-          <div className="pt-2 flex flex-wrap items-center justify-center gap-3 sm:gap-6 text-xs text-(--text-muted) font-semibold">
-            <span className="flex items-center gap-1.5 bg-slate-500/5 px-3 py-1 rounded-full border border-(--border-subtle)">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
-              Live Intake Active
-            </span>
-            <span className="flex items-center gap-1.5 bg-slate-500/5 px-3 py-1 rounded-full border border-(--border-subtle)">
-              <Sparkles className="w-3.5 h-3.5 text-purple-600" />
-              99.2% Clustering Accuracy
-            </span>
-            <span className="flex items-center gap-1.5 bg-slate-500/5 px-3 py-1 rounded-full border border-(--border-subtle)">
-              <Activity className="w-3.5 h-3.5 text-blue-500" />
-              Sub-second Triage Index
-            </span>
-          </div>
         </div>
 
-        {/* TWO HERO CITIZEN ACTION CARDS WITH UIVERSE CTA BUTTONS */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-5xl mx-auto pt-2">
+        {/* DUAL ACTION CARDS (Clean Elevated Layout) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-5xl mx-auto">
           
-          {/* CARD 1: REPORT INCIDENT */}
+          {/* CARD 1: REPORT DISASTER */}
           <div className="spatial-card p-6 sm:p-9 rounded-3xl relative overflow-hidden group flex flex-col justify-between items-center text-center space-y-6">
             <div className="flex flex-col items-center space-y-3.5 w-full">
               <div className="p-4 bg-linear-to-tr from-purple-600 to-indigo-600 rounded-2xl text-white shadow-lg shadow-purple-600/25 group-hover:scale-110 transition-transform">
-                <FilePlus className="w-8 h-8" />
+                <Flame className="w-8 h-8" />
               </div>
               <h2 className="text-2xl font-black text-(--text-main) group-hover:text-purple-600 dark:group-hover:text-purple-300 transition">
-                Report an Emergency
+                Report a Disaster
               </h2>
               <p className="text-(--text-muted) text-xs sm:text-sm leading-relaxed max-w-md">
-                Witnessing a flood, wildfire, or landslide? Upload or snap a live photo. Our neural vision model automatically detects hazard type and alerts nearby dispatch teams.
+                Witnessing flood water, active fire, structural collapse or blocked roadway? Upload photos and geo-coordinates for instantaneous AI verification.
               </p>
-              
+
               <ul className="space-y-2 text-xs text-(--text-muted) pt-2 w-full max-w-xs text-left">
                 <li className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
-                  <span>Multimodal image & location verification</span>
+                  <CheckCircle2 className="w-4 h-4 text-purple-600 dark:text-purple-400 shrink-0" />
+                  <span>Instant multi-modal severity grading</span>
                 </li>
                 <li className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
-                  <span>Instant Report Tracking ID generation</span>
+                  <CheckCircle2 className="w-4 h-4 text-purple-600 dark:text-purple-400 shrink-0" />
+                  <span>Interactive pinpoint map geolocation</span>
                 </li>
               </ul>
             </div>
@@ -145,33 +189,59 @@ export default function Home() {
 
         </div>
 
-        {/* LIVE SITUATIONAL METRICS ROW */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-5xl mx-auto pt-4">
-          <div className="spatial-card p-5 rounded-2xl text-left space-y-1">
-            <span className="text-[10px] uppercase font-bold text-(--text-muted) tracking-wider">Total Reports</span>
-            <div className="text-2xl sm:text-3xl font-black text-(--text-main)">{totalCount}</div>
-            <span className="text-[11px] text-purple-600 dark:text-purple-400 font-semibold block">In Response Grid</span>
-          </div>
-
-          <div className="spatial-card p-5 rounded-2xl text-left space-y-1 border-red-500/40 glow-p1">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] uppercase font-bold text-red-600 dark:text-red-400 tracking-wider">Active P1 Critical</span>
-              <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping"></span>
+        {/* SINGLE CONSOLIDATED EMERGENCY HOTLINES CARD (Img 4) */}
+        <div className="max-w-5xl mx-auto pt-4">
+          <div className="spatial-card p-6 sm:p-8 rounded-3xl border border-(--border-subtle) shadow-xl space-y-6">
+            
+            {/* Header inside single card */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800 gap-2">
+              <div className="flex items-center gap-2.5">
+                <div className="w-3 h-3 rounded-full bg-red-500 animate-ping"></div>
+                <h3 className="text-sm sm:text-base font-black uppercase tracking-wider text-(--text-main)">
+                  Urgent Emergency Hotlines (Instant One-Tap Dial)
+                </h3>
+              </div>
+              <span className="text-xs text-(--text-muted) font-semibold flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                Verified 24/7 National Dispatch & Rapid Response
+              </span>
             </div>
-            <div className="text-2xl sm:text-3xl font-black text-red-600 dark:text-red-400">{p1Count}</div>
-            <span className="text-[11px] text-red-500 font-semibold block">Immediate Threat</span>
-          </div>
 
-          <div className="spatial-card p-5 rounded-2xl text-left space-y-1">
-            <span className="text-[10px] uppercase font-bold text-(--text-muted) tracking-wider">Under Operations</span>
-            <div className="text-2xl sm:text-3xl font-black text-amber-500">{verifiedCount}</div>
-            <span className="text-[11px] text-amber-600 font-semibold block">Field Units Dispatched</span>
-          </div>
+            {/* Separate calling section cards inside the master card */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
+              {CRISIS_HOTLINES.map((hotline) => {
+                const IconComponent = hotline.icon;
+                return (
+                  <a
+                    key={hotline.number}
+                    href={`tel:${hotline.number}`}
+                    className={`p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 ${hotline.hoverBorder} transition-all tactile-spring flex flex-col justify-between space-y-3 group text-left shadow-xs hover:shadow-md`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-(--text-main) group-hover:scale-110 transition-transform">
+                        <IconComponent className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                      </div>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${hotline.badgeColor}`}>
+                        {hotline.category}
+                      </span>
+                    </div>
 
-          <div className="spatial-card p-5 rounded-2xl text-left space-y-1">
-            <span className="text-[10px] uppercase font-bold text-(--text-muted) tracking-wider">AI Deduplication</span>
-            <div className="text-2xl sm:text-3xl font-black text-emerald-500">99.2%</div>
-            <span className="text-[11px] text-emerald-600 font-semibold block">Noise Filtered</span>
+                    <div>
+                      <span className="text-2xl font-black font-mono text-(--text-main) tracking-tight block">
+                        {hotline.number}
+                      </span>
+                      <h4 className="text-xs font-bold text-(--text-main) mt-0.5">
+                        {hotline.title}
+                      </h4>
+                      <p className="text-[10px] text-(--text-muted) line-clamp-1 mt-0.5">
+                        {hotline.subtitle}
+                      </p>
+                    </div>
+                  </a>
+                );
+              })}
+            </div>
+
           </div>
         </div>
 
