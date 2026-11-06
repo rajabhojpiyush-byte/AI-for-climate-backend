@@ -15,19 +15,16 @@ import { useIncidents } from '../context/IncidentContext';
 
 import RealMap from '../components/map/RealMap';
 import { submitReportAPI, analyzePreviewAPI } from '../services/api';
+import { API_BASE_URL } from '../config';
 
 
 
 // Preset sample photos for instant testing
 
 const DEMO_PRESETS = [
-
-  { label: '🌊 Flood Sample', desc: 'Over 4 feet water in urban market street, vehicles submerged', url: 'https://images.unsplash.com/photo-1547683905-f686c993aae5?auto=format&fit=crop&w=1200&q=80' },
-
-  { label: '🔥 Wildfire Sample', desc: 'Active brushfire spreading near mountain highway with heavy smoke', url: 'https://images.unsplash.com/photo-1602980085566-4c2813583569?auto=format&fit=crop&w=1200&q=80' },
-
-  { label: '⛰️ Landslide Sample', desc: 'Massive rockfall and mud coming down the ghat pass blocking road', url: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=1200&q=80' },
-
+  { label: '🌊 Flood Sample', desc: 'Over 4 feet water in urban market street, vehicles submerged', url: '/samples/flood_sample.jpg' },
+  { label: '🔥 Wildfire Sample', desc: 'Active brushfire spreading near mountain highway with heavy smoke', url: '/samples/wildfire_sample.jpg' },
+  { label: '⛰️ Landslide Sample', desc: 'Massive rockfall and mud coming down the ghat pass blocking road', url: '/samples/landslide_sample.jpg' },
 ];
 
 
@@ -50,7 +47,14 @@ export default function CitizenReport() {
 
   // Form State
   const [description, setDescription] = useState('');
-  const [imagePreview, setImagePreview] = useState(null);
+  const [validationModal, setValidationModal] = useState({
+    isOpen: false,
+    title: 'Please enter a valid disaster report',
+    message: '',
+    reason: ''
+  });
+
+  const [imagePreview, setImagePreview] = useState(DEMO_PRESETS[0].url);
   const [selectedFile, setSelectedFile] = useState(null);
 
   // Live real-time AI interpretation as user enters data
@@ -134,28 +138,65 @@ export default function CitizenReport() {
     }
   };
 
+  const handleSelectPreset = async (p) => {
+    setImagePreview(p.url);
+    if (!description) setDescription(p.desc);
+    try {
+      const res = await fetch(p.url);
+      if (!res.ok) throw new Error('Failed to load sample image');
+      const blob = await res.blob();
+      const file = new File([blob], 'demo_evidence.jpg', { type: 'image/jpeg' });
+      setSelectedFile(file);
+    } catch {
+      setSelectedFile(null);
+    }
+  };
+
 
 
   const runAiIdentification = async () => {
+    if (!description || description.trim().length < 5) {
+      setValidationModal({
+        isOpen: true,
+        title: 'Please enter a valid disaster report',
+        message: 'Report Description Required',
+        reason: 'Please enter a detailed eyewitness description of the emergency incident before running AI verification.'
+      });
+      return;
+    }
+
     setIsAiScanning(true);
 
     try {
-      // 1. Call real backend Nugen AI preview
-      const preview = await analyzePreviewAPI(description || 'Disaster incident reported');
+      // 1. Call real backend preview with description and visual evidence
+      const preview = await analyzePreviewAPI(description, selectedFile);
       
+      // Strict validity check: detect pranks / jokes / metaphors / irrelevant / blank images
+      if (preview.is_valid === false) {
+        setValidationModal({
+          isOpen: true,
+          title: 'Please enter a valid disaster report',
+          message: preview.validation_message || 'Please enter a valid disaster report',
+          reason: preview.reasoning || 'The AI detected that this report appears to be a joke, prank, or irrelevant to genuine disaster emergencies.'
+        });
+        return;
+      }
+
       const rawSev = (preview.severity || 'HIGH').toUpperCase();
       const priority = rawSev.includes('CRIT') ? 'P1' : (rawSev.includes('HIGH') ? 'P2' : 'P3');
       
-      let tags = ['ai-verified', 'witness-evidence'];
+      let tags = preview.extracted_tags && preview.extracted_tags.length > 0
+        ? preview.extracted_tags
+        : ['ai-verified', 'witness-evidence'];
       const textLower = (description + ' ' + (preview.disaster_type || '')).toLowerCase();
       if (textLower.includes('earthquake') || textLower.includes('quake') || textLower.includes('tremor') || textLower.includes('seismic')) {
-        tags = ['seismic-tremor', 'structural-collapse', 'aftershock-risk'];
+        tags = [...tags, 'seismic-tremor', 'structural-collapse', 'aftershock-risk'];
       } else if (textLower.includes('fire')) {
-        tags = ['combustion-plume', 'rapid-spread', 'smoke-inhalation-risk'];
+        tags = [...tags, 'combustion-plume', 'rapid-spread', 'smoke-inhalation-risk'];
       } else if (textLower.includes('landslide')) {
-        tags = ['geological-displacement', 'roadway-blockage', 'debris-flow'];
+        tags = [...tags, 'geological-displacement', 'roadway-blockage', 'debris-flow'];
       } else if (textLower.includes('flood')) {
-        tags = ['water-hazard', 'submerged-infrastructure', 'flash-inundation'];
+        tags = [...tags, 'water-hazard', 'submerged-infrastructure', 'flash-inundation'];
       }
 
       setAiResult({
@@ -163,13 +204,37 @@ export default function CitizenReport() {
         confidenceScore: preview.confidence ? (preview.confidence > 1 ? preview.confidence / 100 : preview.confidence) : 0.92,
         severity: rawSev,
         priority,
-        extractedTags: tags,
+        extractedTags: Array.from(new Set(tags)),
         explanation: preview.reasoning || 'Automated multi-modal analysis completed.'
       });
+      setStep(2);
     } catch (err) {
-      console.warn('Backend preview failed, utilizing intelligent client parsing:', err);
-      const text = (description || '').toLowerCase();
+      console.warn('Backend preview failed or rejected:', err);
+      const errMsg = err.detail || err.message || '';
       
+      if (errMsg.toLowerCase().includes('valid disaster report') || errMsg.includes('400')) {
+        setValidationModal({
+          isOpen: true,
+          title: 'Please enter a valid disaster report',
+          message: 'Verification Flagged Submission',
+          reason: errMsg.replace(/^Error:\s*/, '')
+        });
+        return;
+      }
+
+      // Offline client-side verification
+      const text = (description || '').toLowerCase();
+      const isPrank = /\b(lol|lmao|haha|heart is on fire|prank|joke|buy cheap|what time|recipe)\b/.test(text);
+      if (isPrank) {
+        setValidationModal({
+          isOpen: true,
+          title: 'Please enter a valid disaster report',
+          message: 'Informal or Irrelevant Content Detected',
+          reason: 'This emergency portal is strictly for genuine disaster reporting. Please enter a valid disaster report describing an authentic hazard.'
+        });
+        return;
+      }
+
       let type = 'Climate Emergency';
       let priority = 'P2';
       let severity = 'HIGH';
@@ -216,9 +281,9 @@ export default function CitizenReport() {
         extractedTags: tags,
         explanation
       });
+      setStep(2);
     } finally {
       setIsAiScanning(false);
-      setStep(2);
     }
   };
 
@@ -274,7 +339,6 @@ export default function CitizenReport() {
 
   const handleFinalSubmit = async () => {
     setIsSubmitting(true);
-    let createdIncident = null;
 
     try {
       const res = await submitReportAPI({
@@ -285,16 +349,16 @@ export default function CitizenReport() {
         imageFile: selectedFile
       });
 
-      const imageFinalUrl = res.image 
-        ? `${API_BASE_URL}/${res.image.replace(/^\//, '')}`
+      const serverImageUrl = res.image 
+        ? (res.image.startsWith('http') ? res.image : `${API_BASE_URL}/${res.image.replace(/^\//, '')}`)
         : imagePreview;
 
-      createdIncident = {
+      const createdIncident = {
         id: `INC-${res.report_id}`,
         rawId: res.report_id,
         disasterType: res.disaster_type || aiResult.disasterType,
         description: description || 'Eyewitness emergency report with camera capture.',
-        imageUrl: imageFinalUrl,
+        imageUrl: serverImageUrl,
         location,
         incidentTime: new Date().toISOString(),
         status: 'Reported',
@@ -312,18 +376,19 @@ export default function CitizenReport() {
       };
 
       addIncident(createdIncident);
+      navigate('/report/success', { state: { incident: createdIncident } });
     } catch (err) {
-      console.warn('Backend submission error, falling back locally:', err);
-      createdIncident = addIncident({
-        disasterType: aiResult.disasterType,
-        description: description || 'Eyewitness emergency report with camera capture.',
-        imageUrl: imagePreview,
-        location,
-        incidentTime: new Date().toISOString()
+      console.warn('Backend submission rejected or failed:', err);
+      const detail = err.detail || err.message || '';
+      // Pop up error and DO NOT navigate to success!
+      setValidationModal({
+        isOpen: true,
+        title: 'Please enter a valid disaster report',
+        message: 'Submission Rejected',
+        reason: detail.replace(/^Error:\s*/, '') || 'The server rejected this report. Please provide a valid disaster report describing an authentic emergency.'
       });
     } finally {
       setIsSubmitting(false);
-      navigate('/report/success', { state: { incident: createdIncident } });
     }
   };
 
@@ -596,10 +661,7 @@ export default function CitizenReport() {
 
                       type="button"
 
-                      onClick={() => {
-                        setImagePreview(p.url);
-                        setDescription(p.desc);
-                      }}
+                      onClick={() => handleSelectPreset(p)}
 
                       className="px-3.5 py-1.5 rounded-xl bg-white dark:bg-slate-900 hover:border-purple-500 text-xs font-semibold text-(--text-main) border border-slate-300 dark:border-slate-700 shadow-sm transition tactile-spring cursor-pointer"
 
@@ -1146,6 +1208,39 @@ export default function CitizenReport() {
       </div>
 
 
+
+      {/* REJECTION POP-UP MODAL (For Pranks, Jokes & Irrelevant Reports) */}
+      {validationModal.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white dark:bg-slate-900 border-2 border-red-500/50 rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl space-y-5 text-center relative overflow-hidden">
+            <div className="w-16 h-16 rounded-2xl bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400 border border-red-300 dark:border-red-500/30 flex items-center justify-center mx-auto shadow-md">
+              <AlertTriangle className="w-8 h-8" />
+            </div>
+
+            <div className="space-y-2">
+              <span className="text-[11px] font-extrabold uppercase tracking-widest text-red-600 dark:text-red-400">
+                Verification Alert
+              </span>
+              <h3 className="text-xl sm:text-2xl font-black text-(--text-main)">
+                {validationModal.title}
+              </h3>
+              <p className="text-xs sm:text-sm text-(--text-muted) leading-relaxed">
+                {validationModal.reason}
+              </p>
+            </div>
+
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => setValidationModal({ isOpen: false, title: 'Please enter a valid disaster report', message: '', reason: '' })}
+                className="w-full py-3 px-6 rounded-xl font-bold text-sm text-white bg-red-600 hover:bg-red-700 transition shadow-lg shadow-red-600/30 cursor-pointer tactile-spring"
+              >
+                Understood, Edit Report
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
 

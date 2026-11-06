@@ -52,7 +52,7 @@ def normalize_disaster_type(value):
             return name
     raise ValueError(f"unknown disaster_type '{value}'")
 SEVERITIES = {"low": "Low", "medium": "Medium", "moderate": "Medium",
-              "high": "High", "critical": "Critical"}
+              "high": "High", "critical": "Critical", "none": "Low"}
 
 # Results below this confidence are sent to a human instead of trusted
 LOW_CONFIDENCE_THRESHOLD = 50.0
@@ -72,6 +72,9 @@ class AIAnalysis(BaseModel):
     image_consistent: Optional[bool] = None
     # The AI's own "a human should check this" flag (None = it did not say)
     human_review_required: Optional[bool] = None
+    # Disaster validity check (catches pranks, metaphors, spam, irrelevant text)
+    is_valid_disaster: Optional[bool] = None
+    validation_message: Optional[str] = None
 
     @field_validator("disaster_type")
     @classmethod
@@ -120,6 +123,7 @@ _KEY_ALIASES = {
     "disaster_category": "disaster_type",
     "category": "disaster_type",
     "explanation": "reasoning",
+    "is_valid": "is_valid_disaster",
 }
 
 

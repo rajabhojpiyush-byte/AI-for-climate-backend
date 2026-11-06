@@ -72,10 +72,13 @@ export async function fetchReportByIdAPI(id) {
   return formatReportToIncident(data);
 }
 
-// Step 2 Preview: Analyze disaster description using Nugen / Backend
-export async function analyzePreviewAPI(description) {
+// Step 2 Preview: Analyze disaster description & image using Nugen / Backend
+export async function analyzePreviewAPI(description, imageFile = null) {
   const formData = new FormData();
   formData.append('description', description);
+  if (imageFile) {
+    formData.append('image', imageFile);
+  }
 
   const response = await fetch(`${API_BASE_URL}/analyze-preview`, {
     method: 'POST',
@@ -83,7 +86,9 @@ export async function analyzePreviewAPI(description) {
   });
 
   if (!response.ok) {
-    throw new Error(`Preview analysis failed: ${response.statusText}`);
+    const errorData = await response.json().catch(() => null);
+    const msg = errorData?.detail || response.statusText;
+    throw new Error(`Preview analysis failed: ${msg}`);
   }
 
   return await response.json();
@@ -107,8 +112,12 @@ export async function submitReportAPI({ description, latitude, longitude, timest
   });
 
   if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Submission failed (${response.status}): ${errorText}`);
+    const errData = await response.json().catch(() => null);
+    const detailMsg = errData?.detail || await response.text();
+    const error = new Error(detailMsg);
+    error.status = response.status;
+    error.detail = detailMsg;
+    throw error;
   }
 
   const result = await response.json();
